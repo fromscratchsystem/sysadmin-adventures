@@ -343,6 +343,14 @@ int main(void) {
 			continue;
 		}
 
+		/* ── Scroll narrateur Shift+PageUp / Shift+PageDown ── */
+		if (ch == KEY_SPREVIOUS || ch == KEY_SNEXT) {
+			int half = (l.narrator.lines - 2) / 2;
+			narrator_scroll(&l.narrator, ch == KEY_SPREVIOUS ? half : -half);
+			redraw_input(l.input_win, input_buf, input_pos);
+			continue;
+		}
+
 		/* ── Scrollback PageUp / PageDown ── */
 		if (ch == KEY_PPAGE || ch == KEY_NPAGE) {
 			if (shells[active].alive && shells[active].vterm) {

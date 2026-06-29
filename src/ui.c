@@ -1,6 +1,39 @@
 #include "ui.h"
 #include "shell.h"
 #include <locale.h>
+#include <string.h>
+
+/* ═══════════════════════════════════════════════════════════════
+ * Buffer d'historique du narrateur — global pour survivre aux resize
+ * ═══════════════════════════════════════════════════════════════ */
+
+#define NARRATOR_HIST 512
+#define NARRATOR_LINE 256
+
+static char g_nb_lines[NARRATOR_HIST][NARRATOR_LINE];
+static int  g_nb_count  = 0;   /* lignes stockées */
+static int  g_nb_head   = 0;   /* prochain emplacement d'écriture */
+static int  g_nb_offset = 0;   /* 0=live, N=remonté de N lignes */
+
+static void narrator_render(Panel *p) {
+    int height = p->lines - 2;
+    werase(p->inner);
+    wattron(p->inner, COLOR_PAIR(COL_NARRATOR_TEXT));
+
+    /* Dernière ligne à afficher (la plus récente dans la vue) */
+    int last  = g_nb_count - 1 - g_nb_offset;
+    int first = last - height + 1;
+    if (first < 0) first = 0;
+
+    int row = 0;
+    for (int i = first; i <= last && row < height; i++, row++) {
+        int idx = (g_nb_head - g_nb_count + i + NARRATOR_HIST) % NARRATOR_HIST;
+        mvwprintw(p->inner, row, 0, "%s", g_nb_lines[idx]);
+    }
+
+    wattroff(p->inner, COLOR_PAIR(COL_NARRATOR_TEXT));
+    wrefresh(p->inner);
+}
 
 /* ═══════════════════════════════════════════════════════════════
  * INITIALISATION
@@ -57,8 +90,6 @@ Panel make_panel(int lines, int cols, int y, int x,
     wrefresh(p.border);
 
     p.inner = newwin(lines - 2, cols - 2, y + 1, x + 1);
-    scrollok(p.inner, TRUE);
-    idlok(p.inner, TRUE);
     return p;
 }
 
@@ -88,7 +119,6 @@ Layout create_layout(void) {
 
     l.narrator = make_panel(narrator_h, l.term_cols, 0, 0,
                             COL_NARRATOR_BORDER, "NARRATEUR");
-    wattron(l.narrator.inner, COLOR_PAIR(COL_NARRATOR_TEXT));
 
     /* Barre d'onglets : 1 ligne entre narrateur et terminal */
     l.tab_bar = newwin(1, l.term_cols, narrator_h, 0);
@@ -128,6 +158,8 @@ Layout handle_resize(Layout *old, Shell *shells, int nshells) {
         if (shells[i].alive)
             shell_resize(&shells[i], l.shell.lines - 2, l.term_cols - 2);
     }
+
+    narrator_render(&l.narrator);
     return l;
 }
 
@@ -183,10 +215,28 @@ void redraw_input(WINDOW *input_win, const char *buf, int pos) {
  * ═══════════════════════════════════════════════════════════════ */
 
 void narrator_say(Panel *p, const char *msg) {
-    wattron(p->inner, COLOR_PAIR(COL_NARRATOR_TEXT));
-    wprintw(p->inner, "\n%s\n", msg);
-    wattroff(p->inner, COLOR_PAIR(COL_NARRATOR_TEXT));
-    wrefresh(p->inner);
+    strncpy(g_nb_lines[g_nb_head], msg, NARRATOR_LINE - 1);
+    g_nb_lines[g_nb_head][NARRATOR_LINE - 1] = '\0';
+    g_nb_head = (g_nb_head + 1) % NARRATOR_HIST;
+    if (g_nb_count < NARRATOR_HIST) g_nb_count++;
+
+    /* Re-rend uniquement si on est en vue live */
+    if (g_nb_offset == 0)
+        narrator_render(p);
+}
+
+void narrator_scroll(Panel *p, int delta) {
+    g_nb_offset += delta;
+    if (g_nb_offset < 0) g_nb_offset = 0;
+    int height   = p->lines - 2;
+    int max_off  = g_nb_count - height;
+    if (max_off < 0)             max_off = 0;
+    if (g_nb_offset > max_off)   g_nb_offset = max_off;
+    narrator_render(p);
+}
+
+void narrator_refresh(Panel *p) {
+    narrator_render(p);
 }
 
 void shell_print(Panel *p, const char *line) {
