@@ -68,7 +68,8 @@ PhysSwitch *infra_find_switch(Infra *inf, const char *name);
  *          -1 : limite atteinte
  *          -2 : référence inconnue (baie, etc.)
  *          -3 : nom déjà utilisé
- *          -4 : slot occupé
+ *          -4 : slot invalide (< 1)
+ *          -5 : slot occupé
  */
 int infra_rack_create  (Infra *inf, const char *name, int units);
 int infra_server_add   (Infra *inf, const char *name, const char *rack,
@@ -77,6 +78,17 @@ int infra_switch_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int ports);
 int infra_cable_connect(Infra *inf, const char *server, const char *nic,
                         const char *sw, int port);
+
+/* ── Suppression ──────────────────────────────────────────────── */
+/*
+ * Retourne  0 : succès
+ *          -1 : introuvable
+ *          -2 : dépendances (baie non vide, serveur/switch allumé)
+ */
+int infra_rack_delete     (Infra *inf, const char *name);
+int infra_server_delete   (Infra *inf, const char *name);
+int infra_switch_delete   (Infra *inf, const char *name);
+int infra_cable_disconnect(Infra *inf, const char *server, const char *nic);
 
 /* ── Requêtes ─────────────────────────────────────────────────── */
 /* Retourne les noms de réseaux Podman associés à un serveur via ses câbles. */

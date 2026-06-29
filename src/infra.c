@@ -67,7 +67,8 @@ int infra_server_add(Infra *inf, const char *name, const char *rack,
     if (!infra_find_rack(inf, rack))        return -2;
     if (infra_find_server(inf, name))       return -3;
     if (size_u < 1) size_u = 1;
-    if (!slot_free(inf, rack, slot, size_u)) return -4;
+    if (slot < 1)                           return -4;
+    if (!slot_free(inf, rack, slot, size_u)) return -5;
 
     PhysServer *s = &inf->servers[inf->nservers];
     strncpy(s->name, name, 31);
@@ -89,7 +90,8 @@ int infra_switch_add(Infra *inf, const char *name, const char *rack,
     if (!infra_find_rack(inf, rack))         return -2;
     if (infra_find_switch(inf, name))        return -3;
     if (size_u < 1) size_u = 1;
-    if (!slot_free(inf, rack, slot, size_u)) return -4;
+    if (slot < 1)                            return -4;
+    if (!slot_free(inf, rack, slot, size_u)) return -5;
 
     PhysSwitch *sw = &inf->switches[inf->nswitches++];
     strncpy(sw->name, name, 31);
@@ -245,6 +247,85 @@ void infra_list_cables(const Infra *inf,
              inf->cables[i].sw,     inf->cables[i].port);
     if (*nlines == 0)
         addl(lines, nlines, max_lines, "  (aucun cable)");
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suppression
+ * ═══════════════════════════════════════════════════════════════ */
+
+int infra_rack_delete(Infra *inf, const char *name) {
+    /* Interdit si des équipements occupent encore la baie */
+    for (int i = 0; i < inf->nservers; i++)
+        if (strcmp(inf->servers[i].rack, name) == 0) return -2;
+    for (int i = 0; i < inf->nswitches; i++)
+        if (strcmp(inf->switches[i].rack, name) == 0) return -2;
+
+    int idx = -1;
+    for (int i = 0; i < inf->nracks; i++)
+        if (strcmp(inf->racks[i].name, name) == 0) { idx = i; break; }
+    if (idx < 0) return -1;
+
+    memmove(&inf->racks[idx], &inf->racks[idx + 1],
+            (size_t)(inf->nracks - idx - 1) * sizeof(Rack));
+    inf->nracks--;
+    return 0;
+}
+
+int infra_server_delete(Infra *inf, const char *name) {
+    int idx = -1;
+    for (int i = 0; i < inf->nservers; i++)
+        if (strcmp(inf->servers[i].name, name) == 0) { idx = i; break; }
+    if (idx < 0)                    return -1;
+    if (inf->servers[idx].powered)  return -2;   /* doit être éteint */
+
+    /* Retire tous les câbles partant de ce serveur */
+    for (int i = 0; i < inf->ncables; ) {
+        if (strcmp(inf->cables[i].server, name) == 0) {
+            memmove(&inf->cables[i], &inf->cables[i + 1],
+                    (size_t)(inf->ncables - i - 1) * sizeof(Cable));
+            inf->ncables--;
+        } else i++;
+    }
+
+    memmove(&inf->servers[idx], &inf->servers[idx + 1],
+            (size_t)(inf->nservers - idx - 1) * sizeof(PhysServer));
+    inf->nservers--;
+    return 0;
+}
+
+int infra_switch_delete(Infra *inf, const char *name) {
+    int idx = -1;
+    for (int i = 0; i < inf->nswitches; i++)
+        if (strcmp(inf->switches[i].name, name) == 0) { idx = i; break; }
+    if (idx < 0)                     return -1;
+    if (inf->switches[idx].powered)  return -2;   /* doit être éteint */
+
+    /* Retire tous les câbles vers ce switch */
+    for (int i = 0; i < inf->ncables; ) {
+        if (strcmp(inf->cables[i].sw, name) == 0) {
+            memmove(&inf->cables[i], &inf->cables[i + 1],
+                    (size_t)(inf->ncables - i - 1) * sizeof(Cable));
+            inf->ncables--;
+        } else i++;
+    }
+
+    memmove(&inf->switches[idx], &inf->switches[idx + 1],
+            (size_t)(inf->nswitches - idx - 1) * sizeof(PhysSwitch));
+    inf->nswitches--;
+    return 0;
+}
+
+int infra_cable_disconnect(Infra *inf, const char *server, const char *nic) {
+    int idx = -1;
+    for (int i = 0; i < inf->ncables; i++)
+        if (strcmp(inf->cables[i].server, server) == 0 &&
+            strcmp(inf->cables[i].nic,    nic)    == 0) { idx = i; break; }
+    if (idx < 0) return -1;
+
+    memmove(&inf->cables[idx], &inf->cables[idx + 1],
+            (size_t)(inf->ncables - idx - 1) * sizeof(Cable));
+    inf->ncables--;
+    return 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════

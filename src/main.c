@@ -551,9 +551,30 @@ int main(void) {
 						sscanf(sub + 5, "%31s", rname);
 						infra_rack_render(&infra, rname, lines, &nl, 64);
 						narrate(&l.narrator, lines, nl);
+					} else if (strncmp(sub, "delete ", 7) == 0) {
+						char rname[32] = "";
+						sscanf(sub + 7, "%31s", rname);
+						if (rname[0] == '\0') {
+							narrator_say(&l.narrator,
+								"Usage : /rack delete <nom>");
+						} else {
+							int rc = infra_rack_delete(&infra, rname);
+							char msg[64];
+							if (rc == 0) {
+								snprintf(msg, sizeof(msg),
+									"Baie '%s' supprimee.", rname);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -1) {
+								narrator_say(&l.narrator, "Baie inconnue.");
+							} else {
+								narrator_say(&l.narrator,
+									"Baie non vide (retirez les equipements d'abord).");
+							}
+						}
 					} else {
 						narrator_say(&l.narrator,
-							"Usage : /rack create|list|show <nom>");
+							"Usage : /rack create|list|show|delete <nom>");
 					}
 
 				} else if (strncmp(gc, "server", 6) == 0
@@ -584,6 +605,8 @@ int main(void) {
 							} else if (rc == -3) {
 								narrator_say(&l.narrator, "Nom deja utilise.");
 							} else if (rc == -4) {
+								narrator_say(&l.narrator, "Slot invalide (doit etre >= 1).");
+							} else if (rc == -5) {
 								narrator_say(&l.narrator, "Slot occupe.");
 							} else {
 								narrator_say(&l.narrator, "Limite de serveurs atteinte.");
@@ -682,9 +705,30 @@ int main(void) {
 						infra_list_servers(&infra,
 							rname[0] ? rname : NULL, lines, &nl, 64);
 						narrate(&l.narrator, lines, nl);
+					} else if (strncmp(sub, "delete ", 7) == 0) {
+						char sname[32] = "";
+						sscanf(sub + 7, "%31s", sname);
+						if (sname[0] == '\0') {
+							narrator_say(&l.narrator,
+								"Usage : /server delete <nom>");
+						} else {
+							int rc = infra_server_delete(&infra, sname);
+							char msg[64];
+							if (rc == 0) {
+								snprintf(msg, sizeof(msg),
+									"Serveur '%s' retire.", sname);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -1) {
+								narrator_say(&l.narrator, "Serveur inconnu.");
+							} else {
+								narrator_say(&l.narrator,
+									"Serveur allume. Eteignez-le d'abord.");
+							}
+						}
 					} else {
 						narrator_say(&l.narrator,
-							"Usage : /server add|poweron|poweroff|list");
+							"Usage : /server add|poweron|poweroff|list|delete");
 					}
 
 				} else if (strncmp(gc, "switch", 6) == 0
@@ -718,6 +762,8 @@ int main(void) {
 							} else if (rc == -3) {
 								narrator_say(&l.narrator, "Nom deja utilise.");
 							} else if (rc == -4) {
+								narrator_say(&l.narrator, "Slot invalide (doit etre >= 1).");
+							} else if (rc == -5) {
 								narrator_say(&l.narrator, "Slot occupe.");
 							} else {
 								narrator_say(&l.narrator, "Limite de switches atteinte.");
@@ -760,9 +806,32 @@ int main(void) {
 						infra_list_switches(&infra,
 							rname[0] ? rname : NULL, lines, &nl, 64);
 						narrate(&l.narrator, lines, nl);
+					} else if (strncmp(sub, "delete ", 7) == 0) {
+						char swname[32] = "";
+						sscanf(sub + 7, "%31s", swname);
+						if (swname[0] == '\0') {
+							narrator_say(&l.narrator,
+								"Usage : /switch delete <nom>");
+						} else {
+							int rc = infra_switch_delete(&infra, swname);
+							char msg[96];
+							if (rc == 0) {
+								container_network_delete(swname);
+								snprintf(msg, sizeof(msg),
+									"Switch '%s' retire (reseau Podman supprime).",
+									swname);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -1) {
+								narrator_say(&l.narrator, "Switch inconnu.");
+							} else {
+								narrator_say(&l.narrator,
+									"Switch allume. Eteignez-le d'abord.");
+							}
+						}
 					} else {
 						narrator_say(&l.narrator,
-							"Usage : /switch add|poweron|poweroff|list");
+							"Usage : /switch add|poweron|poweroff|list|delete");
 					}
 
 				} else if (strncmp(gc, "cable", 5) == 0
@@ -808,14 +877,36 @@ int main(void) {
 					} else if (strcmp(sub, "list") == 0) {
 						infra_list_cables(&infra, lines, &nl, 64);
 						narrate(&l.narrator, lines, nl);
+					} else if (strncmp(sub, "disconnect ", 11) == 0) {
+						char srv_nic[48] = "";
+						sscanf(sub + 11, "%47s", srv_nic);
+						char sname[32] = "", nic[8] = "";
+						sscanf(srv_nic, "%31[^:]:%7s", sname, nic);
+						if (sname[0] == '\0' || nic[0] == '\0') {
+							narrator_say(&l.narrator,
+								"Usage : /cable disconnect <srv>:<nic>");
+						} else {
+							int rc = infra_cable_disconnect(&infra, sname, nic);
+							char msg[64];
+							if (rc == 0) {
+								snprintf(msg, sizeof(msg),
+									"Cable %s:%s deconnecte.", sname, nic);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else {
+								narrator_say(&l.narrator, "Cable introuvable.");
+							}
+						}
 					} else {
 						narrator_say(&l.narrator,
-							"Usage : /cable connect|list");
+							"Usage : /cable connect|disconnect|list");
 					}
 
 				} else {
 						narrator_say(&l.narrator,
 							"Commandes : /deploy /stop /network /rack /server /switch /cable /exit");
+					narrator_say(&l.narrator,
+							"  Suppression : /rack delete, /server delete, /switch delete, /cable disconnect");
 					}
 
 				} else {
