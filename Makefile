@@ -37,3 +37,36 @@ clean:
 
 # ─── Recompilation complète ───────────────────────────────────
 re: clean all
+
+# ─── Tests unitaires ──────────────────────────────────────────
+# test_infra : logique pure, pas de ncurses
+# test_history, test_vterm : tests/ncurses.h stub via -Itests/
+TESTDIR   = tests
+# Pas de -pedantic pour les tests (stubs inline variadiques)
+CFTEST    = $(filter-out -pedantic,$(CFLAGS)) -I$(TESTDIR) -I$(SRCDIR)
+
+TEST_BINS = $(OBJDIR)/test_infra \
+            $(OBJDIR)/test_history \
+            $(OBJDIR)/test_vterm
+
+.PHONY: test
+test: $(OBJDIR) $(TEST_BINS)
+	@echo "────────────────────────────────────────"
+	@failed=0; \
+	for t in $(TEST_BINS); do \
+	  echo; $$t; r=$$?; \
+	  echo "────────────────────────────────────────"; \
+	  [ $$r -ne 0 ] && failed=$$((failed+1)); \
+	done; \
+	if [ $$failed -eq 0 ]; \
+	  then echo "✓  Toutes les suites passées"; \
+	  else echo "✗  $$failed suite(s) en echec"; exit 1; fi
+
+$(OBJDIR)/test_infra: $(TESTDIR)/test_infra.c $(SRCDIR)/infra.c
+	$(CC) $(CFLAGS) -I$(SRCDIR) $^ -o $@
+
+$(OBJDIR)/test_history: $(TESTDIR)/test_history.c $(SRCDIR)/history.c
+	$(CC) $(CFTEST) $^ -o $@
+
+$(OBJDIR)/test_vterm: $(TESTDIR)/test_vterm.c $(SRCDIR)/vterm.c
+	$(CC) $(CFTEST) $^ -o $@
