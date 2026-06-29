@@ -4,6 +4,7 @@
 #include "shell.h"
 #include "container.h"
 #include "vterm.h"
+#include "infra.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -101,6 +102,18 @@ static int game_deploy(Shell *shells, int *nshells,
  * PERSISTANCE
  * ═══════════════════════════════════════════════════════════════ */
 
+static const char *infra_path(void) {
+    static char path[256];
+    const char *home = getenv("HOME");
+    snprintf(path, sizeof(path), "%s/.sysadmin-game.infra", home ? home : ".");
+    return path;
+}
+
+/* Affiche un buffer de lignes dans le panel narrateur. */
+static void narrate(Panel *p, char lines[][128], int n) {
+    for (int i = 0; i < n; i++) narrator_say(p, lines[i]);
+}
+
 static const char *state_path(void) {
     static char path[256];
     const char *home = getenv("HOME");
@@ -165,7 +178,8 @@ static void state_load(Shell *shells, int *nshells,
  * ═══════════════════════════════════════════════════════════════ */
 
 int main(void) {
-	/* Réseau et conteneur principal AVANT ncurses (system() → stderr) */
+	/* Tout ce qui appelle system() doit s'exécuter AVANT initscr() */
+
 	if (container_init_network() != 0) {
 		fprintf(stderr, "Impossible de créer le réseau Podman. Abandon.\n");
 		return 1;
@@ -174,6 +188,12 @@ int main(void) {
 		fprintf(stderr, "Impossible de démarrer le conteneur. Abandon.\n");
 		return 1;
 	}
+
+	/* Infra physique — recrée les réseaux Podman des switches (idempotent) */
+	Infra infra;
+	infra_load(&infra, infra_path());
+	for (int i = 0; i < infra.nswitches; i++)
+		container_network_create(infra.switches[i].name);
 
 	/* Signaux — enregistrés avant initscr() */
 	struct sigaction sa;
@@ -470,9 +490,305 @@ int main(void) {
 							}
 						}
 
+					} else if (strncmp(gc, "rack", 4) == 0
+						&& (gc[4] == ' ' || gc[4] == '\0')) {
+					/* ── /rack create|list|show ── */
+					const char *sub = gc[4] == ' ' ? gc + 5 : "";
+					char lines[64][128]; int nl = 0;
+
+					if (strncmp(sub, "create ", 7) == 0) {
+						char rname[32] = ""; int units = RACK_DEFAULT_U;
+						sscanf(sub + 7, "%31s %d", rname, &units);
+						if (rname[0] == '\0') {
+							narrator_say(&l.narrator,
+								"Usage : /rack create <nom> [<units>]");
+						} else {
+							int rc = infra_rack_create(&infra, rname, units);
+							if (rc == 0) {
+								char msg[64];
+								snprintf(msg, sizeof(msg),
+									"Baie '%s' (%dU) creee.", rname, units);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -3) {
+								narrator_say(&l.narrator, "Une baie de ce nom existe deja.");
+							} else {
+								narrator_say(&l.narrator, "Limite de baies atteinte.");
+							}
+						}
+					} else if (strcmp(sub, "list") == 0) {
+						infra_list_racks(&infra, lines, &nl, 64);
+						narrate(&l.narrator, lines, nl);
+					} else if (strncmp(sub, "show ", 5) == 0) {
+						char rname[32] = "";
+						sscanf(sub + 5, "%31s", rname);
+						infra_rack_render(&infra, rname, lines, &nl, 64);
+						narrate(&l.narrator, lines, nl);
 					} else {
 						narrator_say(&l.narrator,
-							"Commandes : /deploy /stop /network /exit");
+							"Usage : /rack create|list|show <nom>");
+					}
+
+				} else if (strncmp(gc, "server", 6) == 0
+						&& (gc[6] == ' ' || gc[6] == '\0')) {
+					/* ── /server add|poweron|poweroff|list ── */
+					const char *sub = gc[6] == ' ' ? gc + 7 : "";
+					char lines[64][128]; int nl = 0;
+
+					if (strncmp(sub, "add ", 4) == 0) {
+						char sname[32]="", srack[32]="";
+						int slot=1, size_u=1, cpu=1, ram=2048, disk=100;
+						sscanf(sub + 4, "%31s %31s %d %d %d %d %d",
+							sname, srack, &slot, &size_u, &cpu, &ram, &disk);
+						if (sname[0]=='\0' || srack[0]=='\0') {
+							narrator_say(&l.narrator,
+								"Usage : /server add <nom> <rack> <slot> [<U> <cpu> <ram> <disk>]");
+						} else {
+							int rc = infra_server_add(&infra, sname, srack,
+								slot, size_u, cpu, ram, disk);
+							char msg[128];
+							if (rc == 0) {
+								snprintf(msg, sizeof(msg),
+									"Serveur '%s' installe en %s slot %d.", sname, srack, slot);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -2) {
+								narrator_say(&l.narrator, "Baie inconnue.");
+							} else if (rc == -3) {
+								narrator_say(&l.narrator, "Nom deja utilise.");
+							} else if (rc == -4) {
+								narrator_say(&l.narrator, "Slot occupe.");
+							} else {
+								narrator_say(&l.narrator, "Limite de serveurs atteinte.");
+							}
+						}
+
+					} else if (strncmp(sub, "poweron ", 8) == 0
+							|| strcmp(sub, "poweron") == 0) {
+						char sname[32] = "";
+						sscanf(sub + (sub[7]==' ' ? 8 : 7), "%31s", sname);
+						PhysServer *srv = infra_find_server(&infra, sname);
+						if (!srv) {
+							narrator_say(&l.narrator, "Serveur inconnu.");
+						} else if (srv->powered) {
+							narrator_say(&l.narrator, "Serveur deja allume.");
+						} else if (nshells >= MAX_SHELLS) {
+							narrator_say(&l.narrator, "Trop de sessions actives.");
+						} else {
+							const char *nets[MAX_NETS];
+							int nnets = infra_server_nets(&infra, srv->name,
+								nets, MAX_NETS);
+							char msg[64];
+							snprintf(msg, sizeof(msg),
+								"Demarrage de '%s'...", srv->name);
+							narrator_say(&l.narrator, msg);
+							doupdate();
+							if (container_deploy(srv->name, CONTAINER_IMAGE,
+									srv->port, nets, nnets) != 0) {
+								narrator_say(&l.narrator, "Echec du demarrage.");
+							} else {
+								int idx = attach_shell(shells, &nshells,
+									srv->name, srv->port,
+									shell_rows, shell_cols);
+								if (idx >= 0) {
+									srv->powered = 1;
+									shells[idx].nnets = nnets;
+									for (int i = 0; i < nnets; i++)
+										strncpy(shells[idx].extra_nets[i],
+											nets[i], 31);
+									draw_tabs(l.tab_bar, shells, nshells,
+										active, l.term_cols);
+									state_save(shells, nshells);
+									infra_save(&infra, infra_path());
+									snprintf(msg, sizeof(msg),
+										"'%s' operationnel. F%d.",
+										srv->name, idx + 1);
+									narrator_say(&l.narrator, msg);
+								} else {
+									narrator_say(&l.narrator,
+										"Echec de la connexion SSH.");
+								}
+							}
+						}
+
+					} else if (strncmp(sub, "poweroff ", 9) == 0
+							|| strcmp(sub, "poweroff") == 0) {
+						char sname[32] = "";
+						sscanf(sub + (sub[8]==' ' ? 9 : 8), "%31s", sname);
+						PhysServer *srv = infra_find_server(&infra, sname);
+						if (!srv) {
+							narrator_say(&l.narrator, "Serveur inconnu.");
+						} else if (!srv->powered) {
+							narrator_say(&l.narrator, "Serveur deja eteint.");
+						} else {
+							int found = -1;
+							for (int i = 0; i < nshells; i++)
+								if (shells[i].alive &&
+										strcmp(shells[i].name, srv->name)==0)
+									{ found = i; break; }
+							if (found >= 0) {
+								shell_close(&shells[found]);
+								if (found == active) {
+									for (int j = 0; j < nshells; j++)
+										if (shells[j].alive)
+											{ active = j; break; }
+									if (shells[active].alive)
+										vterm_render(shells[active].vterm,
+											l.shell.inner);
+								}
+								draw_tabs(l.tab_bar, shells, nshells,
+									active, l.term_cols);
+							}
+							container_stop(srv->name);
+							srv->powered = 0;
+							state_save(shells, nshells);
+							infra_save(&infra, infra_path());
+							char msg[64];
+							snprintf(msg, sizeof(msg),
+								"'%s' eteint.", srv->name);
+							narrator_say(&l.narrator, msg);
+						}
+
+					} else if (strncmp(sub, "list", 4) == 0) {
+						char rname[32] = "";
+						sscanf(sub + 4, "%31s", rname);
+						infra_list_servers(&infra,
+							rname[0] ? rname : NULL, lines, &nl, 64);
+						narrate(&l.narrator, lines, nl);
+					} else {
+						narrator_say(&l.narrator,
+							"Usage : /server add|poweron|poweroff|list");
+					}
+
+				} else if (strncmp(gc, "switch", 6) == 0
+						&& (gc[6] == ' ' || gc[6] == '\0')) {
+					/* ── /switch add|poweron|poweroff|list ── */
+					const char *sub = gc[6] == ' ' ? gc + 7 : "";
+					char lines[64][128]; int nl = 0;
+
+					if (strncmp(sub, "add ", 4) == 0) {
+						char swname[32]="", srack[32]="";
+						int slot=1, size_u=1, ports=24;
+						sscanf(sub + 4, "%31s %31s %d %d %d",
+							swname, srack, &slot, &size_u, &ports);
+						if (swname[0]=='\0' || srack[0]=='\0') {
+							narrator_say(&l.narrator,
+								"Usage : /switch add <nom> <rack> <slot> [<U> [<ports>]]");
+						} else {
+							int rc = infra_switch_add(&infra, swname, srack,
+								slot, size_u, ports);
+							char msg[80];
+							if (rc == 0) {
+								/* Crée le réseau Podman backing */
+								container_network_create(swname);
+								snprintf(msg, sizeof(msg),
+									"Switch '%s' installe (%dp, reseau Podman cree).",
+									swname, ports);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -2) {
+								narrator_say(&l.narrator, "Baie inconnue.");
+							} else if (rc == -3) {
+								narrator_say(&l.narrator, "Nom deja utilise.");
+							} else if (rc == -4) {
+								narrator_say(&l.narrator, "Slot occupe.");
+							} else {
+								narrator_say(&l.narrator, "Limite de switches atteinte.");
+							}
+						}
+
+					} else if (strncmp(sub, "poweron ", 8) == 0
+							|| strcmp(sub, "poweron") == 0) {
+						char swname[32] = "";
+						sscanf(sub + (sub[7]==' ' ? 8 : 7), "%31s", swname);
+						PhysSwitch *sw = infra_find_switch(&infra, swname);
+						if (!sw) narrator_say(&l.narrator, "Switch inconnu.");
+						else if (sw->powered) narrator_say(&l.narrator, "Deja allume.");
+						else {
+							sw->powered = 1;
+							infra_save(&infra, infra_path());
+							char msg[64];
+							snprintf(msg, sizeof(msg), "Switch '%s' allume.", swname);
+							narrator_say(&l.narrator, msg);
+						}
+
+					} else if (strncmp(sub, "poweroff ", 9) == 0
+							|| strcmp(sub, "poweroff") == 0) {
+						char swname[32] = "";
+						sscanf(sub + (sub[8]==' ' ? 9 : 8), "%31s", swname);
+						PhysSwitch *sw = infra_find_switch(&infra, swname);
+						if (!sw) narrator_say(&l.narrator, "Switch inconnu.");
+						else if (!sw->powered) narrator_say(&l.narrator, "Deja eteint.");
+						else {
+							sw->powered = 0;
+							infra_save(&infra, infra_path());
+							char msg[64];
+							snprintf(msg, sizeof(msg), "Switch '%s' eteint.", swname);
+							narrator_say(&l.narrator, msg);
+						}
+
+					} else if (strncmp(sub, "list", 4) == 0) {
+						char rname[32] = "";
+						sscanf(sub + 4, "%31s", rname);
+						infra_list_switches(&infra,
+							rname[0] ? rname : NULL, lines, &nl, 64);
+						narrate(&l.narrator, lines, nl);
+					} else {
+						narrator_say(&l.narrator,
+							"Usage : /switch add|poweron|poweroff|list");
+					}
+
+				} else if (strncmp(gc, "cable", 5) == 0
+						&& (gc[5] == ' ' || gc[5] == '\0')) {
+					/* ── /cable connect|list ── */
+					const char *sub = gc[5] == ' ' ? gc + 6 : "";
+					char lines[64][128]; int nl = 0;
+
+					if (strncmp(sub, "connect ", 8) == 0) {
+						/* /cable connect <server>:<nic> <switch>:<port> */
+						char srv_nic[48]="", sw_port[48]="";
+						sscanf(sub + 8, "%47s %47s", srv_nic, sw_port);
+						char sname[32]="", nic[8]="", swname[32]="";
+						int port = 0;
+						sscanf(srv_nic,  "%31[^:]:%7s",  sname,  nic);
+						sscanf(sw_port,  "%31[^:]:%d",   swname, &port);
+						if (sname[0]=='\0' || nic[0]=='\0'
+								|| swname[0]=='\0') {
+							narrator_say(&l.narrator,
+								"Usage : /cable connect <srv>:<nic> <switch>:<port>");
+						} else {
+							int rc = infra_cable_connect(&infra, sname, nic,
+								swname, port);
+							char msg[128];
+							if (rc == 0) {
+								snprintf(msg, sizeof(msg),
+									"Cable : %s:%s -> %s:port%d",
+									sname, nic, swname, port);
+								narrator_say(&l.narrator, msg);
+								infra_save(&infra, infra_path());
+							} else if (rc == -2) {
+								narrator_say(&l.narrator,
+									"Serveur ou switch inconnu.");
+							} else if (rc == -3) {
+								narrator_say(&l.narrator,
+									"Cette NIC est deja cablee.");
+							} else {
+								narrator_say(&l.narrator,
+									"Limite de cables atteinte.");
+							}
+						}
+
+					} else if (strcmp(sub, "list") == 0) {
+						infra_list_cables(&infra, lines, &nl, 64);
+						narrate(&l.narrator, lines, nl);
+					} else {
+						narrator_say(&l.narrator,
+							"Usage : /cable connect|list");
+					}
+
+				} else {
+						narrator_say(&l.narrator,
+							"Commandes : /deploy /stop /network /rack /server /switch /cable /exit");
 					}
 
 				} else {

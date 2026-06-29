@@ -21,7 +21,7 @@
 #define CMD_MAX         256
 
 /* ─── Multi-conteneurs ───────────────────────────────────────── */
-#define MAX_SHELLS      8
+#define MAX_SHELLS     16   /* conteneur principal + serveurs infra + deploys */
 #define MAX_NETS        8   /* réseaux additionnels par conteneur */
 
 /* ─── Paires de couleurs ncurses ─────────────────────────────── */
