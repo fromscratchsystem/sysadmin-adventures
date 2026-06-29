@@ -99,6 +99,7 @@ int container_ensure_running(void)
         snprintf(cmd, sizeof(cmd),
             "podman run -d --name %s"
             " --network %s --hostname %s"
+            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
             " -p 127.0.0.1:%d:22 %s",
             CONTAINER_NAME,
             CONTAINER_NETWORK, CONTAINER_NAME,
@@ -140,6 +141,7 @@ int container_deploy(const char *name, const char *image, int ssh_port,
         snprintf(cmd, sizeof(cmd),
             "podman run -d --name %s"
             " --network %s --hostname %s"
+            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
             " -p 127.0.0.1:%d:22 %s",
             name,
             CONTAINER_NETWORK, name,
