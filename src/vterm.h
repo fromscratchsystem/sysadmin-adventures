@@ -11,7 +11,8 @@ typedef struct {
 } VCell;
 
 /* ─── État de l'émulateur ────────────────────────────────────────────────── */
-#define VTERM_NCOLORS 9  /* 0=défaut, 1-8 = ANSI black…white */
+#define VTERM_NCOLORS    9    /* 0=défaut, 1-8 = ANSI black…white */
+#define SCROLLBACK_LINES 500  /* lignes conservées au-dessus de l'écran */
 
 typedef struct VTerm {
     VCell *screen;       /* buffer principal */
@@ -31,6 +32,13 @@ typedef struct VTerm {
 
     int    in_altscreen;   /* 1 si altscreen actif */
 
+    /* Scrollback buffer (circulaire, screen primaire uniquement) */
+    VCell *scrollback;     /* sb_capacity * cols cellules */
+    int    sb_capacity;    /* = SCROLLBACK_LINES */
+    int    sb_count;       /* lignes effectivement stockées */
+    int    sb_head;        /* prochain index d'écriture */
+    int    sb_offset;      /* 0=vue courante, N=remonté de N lignes */
+
     /* Machine à états du parseur */
     int    state;
     int    params[32];
@@ -49,5 +57,6 @@ void   vterm_free   (VTerm *vt);
 void   vterm_resize (VTerm *vt, int rows, int cols);
 void   vterm_process(VTerm *vt, const char *buf, int n);
 void   vterm_render (VTerm *vt, WINDOW *win);
+void   vterm_scroll (VTerm *vt, int delta); /* >0 = remonter, <0 = descendre */
 
 #endif /* VTERM_H */

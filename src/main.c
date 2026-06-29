@@ -343,6 +343,25 @@ int main(void) {
 			continue;
 		}
 
+		/* ── Scrollback PageUp / PageDown ── */
+		if (ch == KEY_PPAGE || ch == KEY_NPAGE) {
+			if (shells[active].alive && shells[active].vterm) {
+				int half = shells[active].vterm->rows / 2;
+				vterm_scroll(shells[active].vterm,
+				             ch == KEY_PPAGE ? half : -half);
+				vterm_render(shells[active].vterm, l.shell.inner);
+				redraw_input(l.input_win, input_buf, input_pos);
+			}
+			continue;
+		}
+
+		/* Toute autre touche ramène à la vue temps-réel */
+		if (shells[active].alive && shells[active].vterm
+				&& shells[active].vterm->sb_offset != 0) {
+			shells[active].vterm->sb_offset = 0;
+			vterm_render(shells[active].vterm, l.shell.inner);
+		}
+
 		switch (ch) {
 
 			case '\n':

@@ -74,6 +74,24 @@ static void fill_screen(VTerm *vt) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * Scrollback buffer — helpers internes
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+static void sb_push(VTerm *vt, const VCell *row) {
+    if (!vt->scrollback || vt->sb_capacity == 0) return;
+    memcpy(vt->scrollback + vt->sb_head * vt->cols,
+           row, (size_t)vt->cols * sizeof(VCell));
+    vt->sb_head = (vt->sb_head + 1) % vt->sb_capacity;
+    if (vt->sb_count < vt->sb_capacity) vt->sb_count++;
+}
+
+/* i=0 = ligne la plus ancienne, i=sb_count-1 = la plus récente */
+static VCell *sb_row(VTerm *vt, int i) {
+    int idx = (vt->sb_head - vt->sb_count + i + vt->sb_capacity) % vt->sb_capacity;
+    return vt->scrollback + idx * vt->cols;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * Scroll dans la région active
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -81,10 +99,19 @@ static void scroll_up_n(VTerm *vt, int n) {
     int top = vt->scroll_top, bot = vt->scroll_bottom;
     int h = bot - top + 1;
     if (n <= 0) return;
+    /* Sauvegarde dans le scrollback uniquement pour l'écran principal
+     * et quand la région de scroll commence en haut (top == 0).
+     * On évite ainsi de polluer le scrollback avec vim/less/htop. */
     if (n >= h) {
+        if (top == 0 && !vt->in_altscreen)
+            for (int r = top; r <= bot; r++)
+                sb_push(vt, vt->cur + r * vt->cols);
         for (int r = top; r <= bot; r++) fill_row(vt, r, 0, vt->cols - 1);
         return;
     }
+    if (top == 0 && !vt->in_altscreen)
+        for (int r = 0; r < n; r++)
+            sb_push(vt, vt->cur + r * vt->cols);
     memmove(vt->cur + top * vt->cols,
             vt->cur + (top + n) * vt->cols,
             (size_t)(h - n) * (size_t)vt->cols * sizeof(VCell));
@@ -475,15 +502,33 @@ void vterm_process(VTerm *vt, const char *buf, int n) {
 
 void vterm_render(VTerm *vt, WINDOW *win) {
     for (int r = 0; r < vt->rows; r++) {
+        VCell *row;
+        if (vt->sb_offset > 0) {
+            /* Vue scrollback : la vue commence sb_offset lignes avant l'écran */
+            int combined = vt->sb_count - vt->sb_offset + r;
+            if (combined < 0) {
+                wmove(win, r, 0);
+                for (int c = 0; c < vt->cols; c++) waddch(win, ' ');
+                continue;
+            } else if (combined < vt->sb_count) {
+                row = sb_row(vt, combined);
+            } else {
+                row = vt->cur + (combined - vt->sb_count) * vt->cols;
+            }
+        } else {
+            row = vt->cur + r * vt->cols;
+        }
         wmove(win, r, 0);
         for (int c = 0; c < vt->cols; c++) {
-            VCell *cell = &vt->cur[r * vt->cols + c];
+            VCell *cell = &row[c];
             waddch(win, (chtype)(unsigned char)cell->ch
                         | COLOR_PAIR(cell->color_pair)
                         | cell->attrs);
         }
     }
-    wmove(win, vt->crow, vt->ccol);
+    /* Curseur visible uniquement en vue temps-réel */
+    if (vt->sb_offset == 0)
+        wmove(win, vt->crow, vt->ccol);
     wrefresh(win);
 }
 
@@ -499,7 +544,11 @@ VTerm *vterm_new(int rows, int cols, int first_pair) {
     vt->cols = cols;
     vt->screen    = calloc((size_t)rows * (size_t)cols, sizeof(VCell));
     vt->altscreen = calloc((size_t)rows * (size_t)cols, sizeof(VCell));
-    if (!vt->screen || !vt->altscreen) { vterm_free(vt); return NULL; }
+    vt->sb_capacity = SCROLLBACK_LINES;
+    vt->scrollback  = calloc((size_t)SCROLLBACK_LINES * (size_t)cols, sizeof(VCell));
+    if (!vt->screen || !vt->altscreen || !vt->scrollback) {
+        vterm_free(vt); return NULL;
+    }
 
     vt->cur           = vt->screen;
     vt->scroll_top    = 0;
@@ -520,18 +569,25 @@ void vterm_free(VTerm *vt) {
     if (!vt) return;
     free(vt->screen);
     free(vt->altscreen);
+    free(vt->scrollback);
     free(vt);
 }
 
 void vterm_resize(VTerm *vt, int rows, int cols) {
     free(vt->screen);
     free(vt->altscreen);
+    free(vt->scrollback);
 
     vt->rows = rows;
     vt->cols = cols;
     vt->screen    = calloc((size_t)rows * (size_t)cols, sizeof(VCell));
     vt->altscreen = calloc((size_t)rows * (size_t)cols, sizeof(VCell));
-    if (!vt->screen || !vt->altscreen) return;
+    vt->scrollback = calloc((size_t)SCROLLBACK_LINES * (size_t)cols, sizeof(VCell));
+    if (!vt->screen || !vt->altscreen || !vt->scrollback) return;
+
+    vt->sb_count  = 0;
+    vt->sb_head   = 0;
+    vt->sb_offset = 0;
 
     vt->cur = vt->in_altscreen ? vt->altscreen : vt->screen;
 
@@ -546,4 +602,10 @@ void vterm_resize(VTerm *vt, int rows, int cols) {
     if (vt->crow >= rows) vt->crow = rows - 1;
     if (vt->ccol >= cols) vt->ccol = cols - 1;
     vt->wrap_pending = 0;
+}
+
+void vterm_scroll(VTerm *vt, int delta) {
+    vt->sb_offset += delta;
+    if (vt->sb_offset < 0)            vt->sb_offset = 0;
+    if (vt->sb_offset > vt->sb_count) vt->sb_offset = vt->sb_count;
 }
