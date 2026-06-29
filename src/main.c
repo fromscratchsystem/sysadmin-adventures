@@ -62,6 +62,21 @@ static int narrator_react(Panel *narrator, const char *cmd) {
  * ═══════════════════════════════════════════════════════════════ */
 
 /*
+ * Retire les shells morts du tableau et réajuste *active.
+ * À appeler après shell_close(), avant draw_tabs().
+ */
+static void shells_compact(Shell *shells, int *nshells, int *active) {
+    for (int i = 0; i < *nshells; ) {
+        if (shells[i].alive) { i++; continue; }
+        memmove(&shells[i], &shells[i + 1],
+                (size_t)(*nshells - i - 1) * sizeof(Shell));
+        (*nshells)--;
+        if (*active > i)              (*active)--;
+        if (*active >= *nshells && *nshells > 0) *active = *nshells - 1;
+    }
+}
+
+/*
  * Ouvre un shell SSH vers un conteneur déjà en cours d'exécution.
  * Retourne le nouvel index ou -1 si MAX_SHELLS atteint.
  */
@@ -313,6 +328,7 @@ int main(void) {
 		if (!running) break;
 
 		if (need_tab_refresh) {
+			shells_compact(shells, &nshells, &active);
 			draw_tabs(l.tab_bar, shells, nshells, active, l.term_cols);
 		}
 
@@ -510,8 +526,9 @@ int main(void) {
 										}
 									}
 									if (!any) { running = 0; break; }
-									vterm_render(shells[active].vterm, l.shell.inner);
 								}
+								shells_compact(shells, &nshells, &active);
+								vterm_render(shells[active].vterm, l.shell.inner);
 								draw_tabs(l.tab_bar, shells, nshells, active, l.term_cols);
 								state_save(shells, nshells);
 							}
@@ -682,10 +699,9 @@ int main(void) {
 									for (int j = 0; j < nshells; j++)
 										if (shells[j].alive)
 											{ active = j; break; }
-									if (shells[active].alive)
-										vterm_render(shells[active].vterm,
-											l.shell.inner);
 								}
+								shells_compact(shells, &nshells, &active);
+								vterm_render(shells[active].vterm, l.shell.inner);
 								draw_tabs(l.tab_bar, shells, nshells,
 									active, l.term_cols);
 							}
