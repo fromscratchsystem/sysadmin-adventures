@@ -681,6 +681,9 @@ static void cmd_hardware(const char *sub, Infra *inf, Panel *nar,
         } else if (rc == -5) {
             narrator_say(nar, "Incompatibilite memoire : generation CPU/RAM differente.");
             narrator_say(nar, "  Ex: DDR4 RAM ne fonctionne pas avec un CPU DDR3.");
+        } else if (rc == -6) {
+            narrator_say(nar, "Incompatibilite socket : ce CPU ne rentre pas dans ce chassis.");
+            narrator_say(nar, "  Ex: un EPYC SP3 ne s'installe pas dans un NUC.");
         }
 
     } else if (strncmp(sub, "remove ", 7) == 0) {

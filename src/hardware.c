@@ -25,42 +25,48 @@ int         server_catalog_size = 0;
 static const HWComp hw_defaults[] = {
     /* CPU DDR3 */
     {"atom-d510",    "Intel Atom D510",           "cpu",
-     {{"cores","2"},{"ghz10","16"},{"mem_gen","DDR3"}}, 3},
+     {{"cores","2"},{"ghz10","16"},{"mem_gen","DDR3"},{"socket","NUC"}}, 4},
     {"xeon-e3-1220", "Intel Xeon E3-1220 v3",     "cpu",
-     {{"cores","4"},{"ghz10","31"},{"mem_gen","DDR3"}}, 3},
+     {{"cores","4"},{"ghz10","31"},{"mem_gen","DDR3"},{"socket","LGA1150"}}, 4},
     {"xeon-e5-2670", "Intel Xeon E5-2670",         "cpu",
-     {{"cores","8"},{"ghz10","26"},{"mem_gen","DDR3"}}, 3},
+     {{"cores","8"},{"ghz10","26"},{"mem_gen","DDR3"},{"socket","LGA2011"}}, 4},
     /* CPU DDR4 */
     {"epyc-7302",    "AMD EPYC 7302",              "cpu",
-     {{"cores","16"},{"ghz10","30"},{"mem_gen","DDR4"}}, 3},
+     {{"cores","16"},{"ghz10","30"},{"mem_gen","DDR4"},{"socket","SP3"}}, 4},
     {"epyc-7543",    "AMD EPYC 7543",              "cpu",
-     {{"cores","32"},{"ghz10","28"},{"mem_gen","DDR4"}}, 3},
+     {{"cores","32"},{"ghz10","28"},{"mem_gen","DDR4"},{"socket","SP3"}}, 4},
     /* CPU DDR5 */
     {"xeon-w3-2435", "Intel Xeon W3-2435",         "cpu",
-     {{"cores","8"},{"ghz10","31"},{"mem_gen","DDR5"}}, 3},
-    /* RAM DDR3 */
+     {{"cores","8"},{"ghz10","31"},{"mem_gen","DDR5"},{"socket","LGA4677"}}, 4},
+    /* RAM DDR3 DIMM ECC */
     {"ddr3-4gb",     "4 GB DDR3 ECC",              "dimm",
      {{"size_mb","4096"},{"mem_gen","DDR3"}}, 2},
     {"ddr3-16gb",    "16 GB DDR3 ECC",             "dimm",
      {{"size_mb","16384"},{"mem_gen","DDR3"}}, 2},
-    /* RAM DDR4 */
+    /* RAM DDR4 DIMM ECC */
     {"ddr4-16gb",    "16 GB DDR4 ECC",             "dimm",
      {{"size_mb","16384"},{"mem_gen","DDR4"}}, 2},
     {"ddr4-32gb",    "32 GB DDR4 ECC",             "dimm",
      {{"size_mb","32768"},{"mem_gen","DDR4"}}, 2},
-    /* RAM DDR5 */
+    /* RAM DDR5 DIMM ECC */
     {"ddr5-32gb",    "32 GB DDR5 ECC",             "dimm",
      {{"size_mb","32768"},{"mem_gen","DDR5"}}, 2},
     {"ddr5-64gb",    "64 GB DDR5 ECC",             "dimm",
      {{"size_mb","65536"},{"mem_gen","DDR5"}}, 2},
-    /* Disques SATA */
-    {"hdd-1tb",      "1 TB SATA HDD",              "sata",
+    /* RAM DDR4 SO-DIMM (mini PC) */
+    {"sodimm-ddr4-8gb",  "8 GB DDR4 SO-DIMM",     "sodimm",
+     {{"size_mb","8192"},{"mem_gen","DDR4"}}, 2},
+    {"sodimm-ddr4-16gb", "16 GB DDR4 SO-DIMM",    "sodimm",
+     {{"size_mb","16384"},{"mem_gen","DDR4"}}, 2},
+    /* Disques HDD SATA 3.5" LFF */
+    {"hdd-1tb",      "1 TB SATA HDD 3.5\"",        "sata35",
      {{"size_gb","1000"},{"disk_type","HDD"},{"iops","150"}}, 3},
-    {"hdd-4tb",      "4 TB SATA HDD",              "sata",
+    {"hdd-4tb",      "4 TB SATA HDD 3.5\"",        "sata35",
      {{"size_gb","4000"},{"disk_type","HDD"},{"iops","150"}}, 3},
-    {"ssd-500gb",    "500 GB SATA SSD",            "sata",
+    /* Disques SSD SATA 2.5" SFF */
+    {"ssd-500gb",    "500 GB SATA SSD 2.5\"",      "sata25",
      {{"size_gb","500"},{"disk_type","SSD"},{"iops","5000"}}, 3},
-    {"ssd-2tb",      "2 TB SATA SSD",              "sata",
+    {"ssd-2tb",      "2 TB SATA SSD 2.5\"",        "sata25",
      {{"size_gb","2000"},{"disk_type","SSD"},{"iops","8000"}}, 3},
     /* NVMe M.2 */
     {"nvme-512gb",   "512 GB NVMe M.2",            "m2",
@@ -68,27 +74,30 @@ static const HWComp hw_defaults[] = {
     /* NVMe U.2 */
     {"nvme-2tb",     "2 TB NVMe U.2",              "u2",
      {{"size_gb","2000"},{"disk_type","NVMe"},{"iops","60000"}}, 3},
+    /* NVMe U.3 enterprise */
+    {"nvme-4tb-u3",  "4 TB NVMe U.3",              "u3",
+     {{"size_gb","4000"},{"disk_type","NVMe"},{"iops","120000"}}, 3},
 };
 static const int hw_defaults_size =
     (int)(sizeof(hw_defaults) / sizeof(hw_defaults[0]));
 
 static const ServerModel srv_defaults[] = {
-    {"generic-1u", "Serveur rack 1U generique",     1, 1,
-     {{"cpu",1},{"dimm",4},{"sata",4}}, 3},
-    {"generic-2u", "Serveur rack 2U generique",     2, 1,
-     {{"cpu",2},{"dimm",8},{"sata",8}}, 3},
-    {"dell-r240",  "Dell PowerEdge R240 (1U)",      1, 1,
-     {{"cpu",1},{"dimm",4},{"sata",2}}, 3},
-    {"hp-dl360",   "HP ProLiant DL360 Gen9 (1U)",   1, 1,
-     {{"cpu",2},{"dimm",4},{"sata",4}}, 3},
-    {"dell-r740",  "Dell PowerEdge R740 (2U)",      2, 1,
+    {"generic-1u", "Serveur rack 1U generique",     1, 1, "",
+     {{"cpu",1},{"dimm",4},{"sata25",4}}, 3},
+    {"generic-2u", "Serveur rack 2U generique",     2, 1, "",
+     {{"cpu",2},{"dimm",8},{"sata35",8}}, 3},
+    {"dell-r240",  "Dell PowerEdge R240 (1U)",      1, 1, "LGA1150",
+     {{"cpu",1},{"dimm",4},{"sata35",4}}, 3},
+    {"hp-dl360",   "HP ProLiant DL360 Gen9 (1U)",   1, 1, "LGA2011",
+     {{"cpu",2},{"dimm",4},{"sata25",4}}, 3},
+    {"dell-r740",  "Dell PowerEdge R740 (2U)",      2, 1, "SP3",
      {{"cpu",2},{"dimm",8},{"pcie_x16",3},{"u2",8}}, 4},
-    {"hp-dl380",   "HP ProLiant DL380 Gen10 (2U)",  2, 1,
-     {{"cpu",2},{"dimm",8},{"sata",8},{"pcie_x16",2}}, 4},
-    {"nuc-i5",     "Intel NUC i5 (occasion)",       0, 0,
-     {{"cpu",1},{"dimm",2},{"m2",1}}, 3},
-    {"hp-prodesk", "HP ProDesk Mini G5 (occasion)", 0, 0,
-     {{"cpu",1},{"dimm",2},{"sata",2}}, 3},
+    {"hp-dl380",   "HP ProLiant DL380 Gen10 (2U)",  2, 1, "SP3",
+     {{"cpu",2},{"dimm",8},{"sata25",4},{"u3",4},{"pcie_x16",2}}, 5},
+    {"nuc-i5",     "Intel NUC i5 (occasion)",       0, 0, "NUC",
+     {{"cpu",1},{"sodimm",2},{"m2",1}}, 3},
+    {"hp-prodesk", "HP ProDesk Mini G5 (occasion)", 0, 0, "LGA1150",
+     {{"cpu",1},{"sodimm",2},{"sata25",2}}, 3},
 };
 static const int srv_defaults_size =
     (int)(sizeof(srv_defaults) / sizeof(srv_defaults[0]));
@@ -241,9 +250,9 @@ int server_catalog_load(const char *path) {
         while (*p == ' ' || *p == '\t') p++;
         if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
 
-        /* Format: id | label | size_u | has_ipmi | slot_type=count,... */
-        char fields[5][64];
-        int nf = split_pipe(p, fields, 5);
+        /* Format: id | label | size_u | has_ipmi | cpu_socket | slot_type=count,... */
+        char fields[6][64];
+        int nf = split_pipe(p, fields, 6);
         if (nf < 5) continue;
 
         ServerModel *m = &server_catalog[server_catalog_size++];
@@ -252,7 +261,12 @@ int server_catalog_load(const char *path) {
         strncpy(m->label, fields[1], 63);
         m->size_u   = atoi(fields[2]);
         m->has_ipmi = atoi(fields[3]);
-        parse_slot_defs(fields[4], m);
+        if (nf >= 6) {
+            strncpy(m->cpu_socket, fields[4], 15);
+            parse_slot_defs(fields[5], m);
+        } else {
+            parse_slot_defs(fields[4], m);
+        }
     }
     fclose(f);
     return server_catalog_size;
@@ -269,7 +283,7 @@ void hw_server_init_slots(PhysServer *srv, const char *model_id) {
 
     if (!m) {
         /* Slots par défaut pour un serveur générique */
-        static const SlotDef def[] = {{"cpu",1},{"dimm",4},{"sata",2}};
+        static const SlotDef def[] = {{"cpu",1},{"dimm",4},{"sata25",2}};
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < def[i].count && srv->nhw_slots < MAX_HW_SLOTS; j++) {
                 strncpy(srv->hw_slots[srv->nhw_slots].type, def[i].type, 15);
@@ -296,7 +310,8 @@ void hw_recompute(PhysServer *srv) {
         if (!c) continue;
         if (strcmp(c->slot_type, "cpu") == 0)
             cores += hw_prop_int(c, "cores", 0);
-        else if (strcmp(c->slot_type, "dimm") == 0)
+        else if (strcmp(c->slot_type, "dimm")   == 0 ||
+                 strcmp(c->slot_type, "sodimm") == 0)
             total_ram += hw_prop_int(c, "size_mb", 0);
         else
             total_disk += hw_prop_int(c, "size_gb", 0);
@@ -334,21 +349,32 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
     }
     if (free_slot < 0) return -3;
 
+    /* Vérification compatibilité socket CPU */
+    if (strcmp(comp->slot_type, "cpu") == 0 && srv->model_id[0]) {
+        const ServerModel *m = srv_model_find(srv->model_id);
+        if (m && m->cpu_socket[0]) {
+            const HWProp *sock = hw_prop(comp, "socket");
+            if (!sock || strcmp(sock->val, m->cpu_socket) != 0) return -6;
+        }
+    }
+
     /* Vérification compatibilité mémoire */
     const HWProp *new_gen_p = hw_prop(comp, "mem_gen");
     const char   *new_gen   = new_gen_p ? new_gen_p->val : "";
 
     if (strcmp(comp->slot_type, "cpu") == 0 && new_gen[0]) {
-        /* Vérifier les DIMMs déjà installés */
+        /* Vérifier les DIMMs/SODIMMs déjà installés */
         for (int i = 0; i < srv->nhw_slots; i++) {
-            if (strcmp(srv->hw_slots[i].type, "dimm") != 0) continue;
+            if (strcmp(srv->hw_slots[i].type, "dimm")   != 0 &&
+                strcmp(srv->hw_slots[i].type, "sodimm") != 0) continue;
             if (!srv->hw_slots[i].comp_id[0]) continue;
             const HWComp *ram = hw_find(srv->hw_slots[i].comp_id);
             if (!ram) continue;
             const HWProp *rg = hw_prop(ram, "mem_gen");
             if (rg && rg->val[0] && strcmp(new_gen, rg->val) != 0) return -5;
         }
-    } else if (strcmp(comp->slot_type, "dimm") == 0 && new_gen[0]) {
+    } else if ((strcmp(comp->slot_type, "dimm")   == 0 ||
+                strcmp(comp->slot_type, "sodimm") == 0) && new_gen[0]) {
         /* Vérifier le CPU installé */
         for (int i = 0; i < srv->nhw_slots; i++) {
             if (strcmp(srv->hw_slots[i].type, "cpu") != 0) continue;
@@ -479,7 +505,8 @@ void hw_show_server(const PhysServer *srv, char lines[][128], int *nlines, int m
                     snprintf(detail, sizeof(detail), "%s  (%sc @ %d.%dGHz  %s)",
                              c->label, cores ? cores->val : "?",
                              g/10, g%10, gen ? gen->val : "?");
-                } else if (strcmp(stype, "dimm") == 0) {
+                } else if (strcmp(stype, "dimm")   == 0 ||
+                           strcmp(stype, "sodimm") == 0) {
                     const HWProp *gen = hw_prop(c, "mem_gen");
                     snprintf(detail, sizeof(detail), "%s  [%s]",
                              c->label, gen ? gen->val : "?");
@@ -518,9 +545,11 @@ void hw_show_server(const PhysServer *srv, char lines[][128], int *nlines, int m
             int cores = hw_prop_int(c, "cores", 0);
             int ghz10 = hw_prop_int(c, "ghz10", 0);
             cpu_score += (float)cores * (float)ghz10 / 10.0f;
-        } else if (strcmp(c->slot_type, "sata") == 0 ||
-                   strcmp(c->slot_type, "u2")   == 0 ||
-                   strcmp(c->slot_type, "m2")   == 0) {
+        } else if (strcmp(c->slot_type, "sata35") == 0 ||
+                   strcmp(c->slot_type, "sata25") == 0 ||
+                   strcmp(c->slot_type, "u2")     == 0 ||
+                   strcmp(c->slot_type, "u3")     == 0 ||
+                   strcmp(c->slot_type, "m2")     == 0) {
             int iops = hw_prop_int(c, "iops", 0);
             if (iops > max_iops) max_iops = iops;
         }

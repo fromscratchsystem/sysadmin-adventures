@@ -1,20 +1,21 @@
 # Catalogue de modèles de serveurs (châssis)
-# Format : id | label | size_u | has_ipmi | slot_type=count,slot_type=count,...
-#   size_u   : hauteur en U  (0 = mini PC, 2 par 1U)
-#   has_ipmi : 1 = IPMI/BMC présent, 0 = accès physique requis
-#   slots    : liste de type=nombre séparés par virgules
+# Format : id | label | size_u | has_ipmi | cpu_socket | slot_type=count,slot_type=count,...
+#   size_u     : hauteur en U  (0 = mini PC, 2 par 1U)
+#   has_ipmi   : 1 = IPMI/BMC présent, 0 = accès physique requis
+#   cpu_socket : socket CPU accepté (vide = tout socket accepté)
+#   slots      : liste de type=nombre séparés par virgules
 # Lignes commençant par # : commentaires
 
 # ── Serveurs rack 1U ──────────────────────────────────────────────────
-generic-1u | Serveur rack 1U generique           | 1 | 1 | cpu=1,dimm=4,sata=4
-dell-r240  | Dell PowerEdge R240 (1U)            | 1 | 1 | cpu=1,dimm=4,sata=2
-hp-dl360   | HP ProLiant DL360 Gen9 (1U)         | 1 | 1 | cpu=2,dimm=4,sata=4
+generic-1u | Serveur rack 1U generique           | 1 | 1 |         | cpu=1,dimm=4,sata25=4
+dell-r240  | Dell PowerEdge R240 (1U)            | 1 | 1 | LGA1150 | cpu=1,dimm=4,sata35=4
+hp-dl360   | HP ProLiant DL360 Gen9 (1U)         | 1 | 1 | LGA2011 | cpu=2,dimm=4,sata25=4
 
 # ── Serveurs rack 2U ──────────────────────────────────────────────────
-generic-2u | Serveur rack 2U generique           | 2 | 1 | cpu=2,dimm=8,sata=8
-dell-r740  | Dell PowerEdge R740 (2U)            | 2 | 1 | cpu=2,dimm=8,pcie_x16=3,u2=8
-hp-dl380   | HP ProLiant DL380 Gen10 (2U)        | 2 | 1 | cpu=2,dimm=8,sata=8,pcie_x16=2
+generic-2u | Serveur rack 2U generique           | 2 | 1 |         | cpu=2,dimm=8,sata35=8
+dell-r740  | Dell PowerEdge R740 (2U)            | 2 | 1 | SP3     | cpu=2,dimm=8,pcie_x16=3,u2=8
+hp-dl380   | HP ProLiant DL380 Gen10 (2U)        | 2 | 1 | SP3     | cpu=2,dimm=8,sata25=4,u3=4,pcie_x16=2
 
 # ── Mini PC d'occasion (pas d'IPMI, 2 par 1U) ────────────────────────
-nuc-i5     | Intel NUC i5 (occasion)             | 0 | 0 | cpu=1,dimm=2,m2=1
-hp-prodesk | HP ProDesk Mini G5 (occasion)       | 0 | 0 | cpu=1,dimm=2,sata=2
+nuc-i5     | Intel NUC i5 (occasion)             | 0 | 0 | NUC     | cpu=1,sodimm=2,m2=1
+hp-prodesk | HP ProDesk Mini G5 (occasion)       | 0 | 0 | LGA1150 | cpu=1,sodimm=2,sata25=2

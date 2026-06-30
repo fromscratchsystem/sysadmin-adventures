@@ -131,11 +131,11 @@ TEST(hw_server_init_slots_default) {
     infra_rack_create(&inf, "rack-A", 42);
     infra_server_add(&inf, "s", "rack-A", 1, 1, 0, 0, 0);
     hw_server_init_slots(&inf.servers[0], NULL);
-    /* default = 1 cpu + 4 dimm + 2 sata = 7 slots */
+    /* default = 1 cpu + 4 dimm + 2 sata25 = 7 slots */
     ASSERT_EQ(inf.servers[0].nhw_slots, 7);
-    ASSERT_EQ(slot_is_empty(&inf.servers[0], "cpu"),  1);
-    ASSERT_EQ(slot_is_empty(&inf.servers[0], "dimm"), 1);
-    ASSERT_EQ(slot_is_empty(&inf.servers[0], "sata"), 1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "cpu"),    1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "dimm"),   1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "sata25"), 1);
 }
 
 TEST(hw_server_init_slots_model) {
@@ -147,7 +147,20 @@ TEST(hw_server_init_slots_model) {
     /* dell-r740 = cpu=2,dimm=8,pcie_x16=3,u2=8 = 21 slots */
     ASSERT_EQ(inf.servers[0].nhw_slots, 21);
     ASSERT_EQ(slot_is_empty(&inf.servers[0], "pcie_x16"), 1);
-    ASSERT_EQ(slot_is_empty(&inf.servers[0], "u2"), 1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "u2"),       1);
+}
+
+TEST(hw_server_init_slots_nuc) {
+    Infra inf;
+    memset(&inf, 0, sizeof(inf));
+    infra_rack_create(&inf, "rack-A", 42);
+    infra_server_add(&inf, "s", "rack-A", 1, 1, 0, 0, 0);
+    hw_server_init_slots(&inf.servers[0], "nuc-i5");
+    /* nuc-i5 = cpu=1,sodimm=2,m2=1 = 4 slots */
+    ASSERT_EQ(inf.servers[0].nhw_slots, 4);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "sodimm"), 1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "m2"),     1);
+    ASSERT_EQ(slot_is_empty(&inf.servers[0], "dimm"),   0); /* pas de DIMM sur NUC */
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -206,6 +219,136 @@ TEST(hw_install_dimm_before_cpu_match) {
     Infra inf = make_infra_with_server();
     ASSERT_EQ(hw_install(&inf, "srv1", "ddr3-16gb"),    0);
     ASSERT_EQ(hw_install(&inf, "srv1", "xeon-e3-1220"), 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : compatibilité socket CPU
+ * ═══════════════════════════════════════════════════════════════ */
+
+static Infra make_infra_with_model(const char *model_id) {
+    Infra inf;
+    memset(&inf, 0, sizeof(inf));
+    infra_rack_create(&inf, "rack-A", 42);
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 2048, 100);
+    strncpy(inf.servers[0].model_id, model_id, 31);
+    hw_server_init_slots(&inf.servers[0], model_id);
+    return inf;
+}
+
+TEST(hw_install_socket_epyc_in_nuc_refused) {
+    /* EPYC SP3 ne rentre pas dans un NUC */
+    Infra inf = make_infra_with_model("nuc-i5");
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7302"), -6);
+    ASSERT_EQ(slot_has_comp(&inf.servers[0], "epyc-7302"), 0);
+}
+
+TEST(hw_install_socket_atom_in_nuc_ok) {
+    /* Atom NUC socket → NUC chassis → OK */
+    Infra inf = make_infra_with_model("nuc-i5");
+    ASSERT_EQ(hw_install(&inf, "srv1", "atom-d510"), 0);
+    ASSERT_EQ(slot_has_comp(&inf.servers[0], "atom-d510"), 1);
+}
+
+TEST(hw_install_socket_epyc_in_generic_ok) {
+    /* generic-1u n'a pas de cpu_socket → accepte tout */
+    Infra inf = make_infra_with_model("generic-1u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7302"), 0);
+}
+
+TEST(hw_install_socket_epyc_in_r740_ok) {
+    /* dell-r740 requiert SP3, EPYC est SP3 → OK */
+    Infra inf = make_infra_with_model("dell-r740");
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7302"), 0);
+}
+
+TEST(hw_install_socket_xeon_e3_in_r740_refused) {
+    /* dell-r740 requiert SP3, Xeon E3 est LGA1150 → refusé */
+    Infra inf = make_infra_with_model("dell-r740");
+    ASSERT_EQ(hw_install(&inf, "srv1", "xeon-e3-1220"), -6);
+}
+
+TEST(hw_install_socket_no_model_any_cpu_ok) {
+    /* Serveur sans model_id → aucune contrainte socket */
+    Infra inf = make_infra_with_server();
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7302"), 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : facteur de forme disque (sata35 / sata25)
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(hw_install_hdd_in_sata35_ok) {
+    /* generic-2u a des baies sata35, hdd-1tb est sata35 → OK */
+    Infra inf = make_infra_with_model("generic-2u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "hdd-1tb"), 0);
+    ASSERT_EQ(slot_has_comp(&inf.servers[0], "hdd-1tb"), 1);
+}
+
+TEST(hw_install_ssd_in_sata25_ok) {
+    /* generic-1u a des baies sata25, ssd-500gb est sata25 → OK */
+    Infra inf = make_infra_with_model("generic-1u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "ssd-500gb"), 0);
+}
+
+TEST(hw_install_hdd_in_sata25_refused) {
+    /* generic-1u n'a que des baies sata25, hdd-1tb est sata35 → -3 */
+    Infra inf = make_infra_with_model("generic-1u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "hdd-1tb"), -3);
+}
+
+TEST(hw_install_ssd_in_sata35_refused) {
+    /* generic-2u n'a que des baies sata35, ssd-500gb est sata25 → -3 */
+    Infra inf = make_infra_with_model("generic-2u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "ssd-500gb"), -3);
+}
+
+TEST(hw_install_nvme_u3_ok) {
+    /* hp-dl380 a des slots u3, nvme-4tb-u3 est u3 → OK */
+    Infra inf = make_infra_with_model("hp-dl380");
+    ASSERT_EQ(hw_install(&inf, "srv1", "nvme-4tb-u3"), 0);
+}
+
+TEST(hw_install_u2_in_u3_refused) {
+    /* hp-dl380 a des slots u3, nvme-2tb est u2 → pas de slot u2 → -3 */
+    Infra inf = make_infra_with_model("hp-dl380");
+    ASSERT_EQ(hw_install(&inf, "srv1", "nvme-2tb"), -3);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : SO-DIMM vs DIMM
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(hw_install_sodimm_in_nuc_ok) {
+    Infra inf = make_infra_with_model("nuc-i5");
+    ASSERT_EQ(hw_install(&inf, "srv1", "sodimm-ddr4-16gb"), 0);
+    ASSERT_EQ(slot_has_comp(&inf.servers[0], "sodimm-ddr4-16gb"), 1);
+    ASSERT_EQ(inf.servers[0].ram_mb, 16384);
+}
+
+TEST(hw_install_dimm_in_nuc_refused) {
+    /* NUC n'a pas de slots dimm → -3 */
+    Infra inf = make_infra_with_model("nuc-i5");
+    ASSERT_EQ(hw_install(&inf, "srv1", "ddr4-16gb"), -3);
+}
+
+TEST(hw_install_sodimm_in_rack_refused) {
+    /* generic-1u n'a pas de slots sodimm → -3 */
+    Infra inf = make_infra_with_model("generic-1u");
+    ASSERT_EQ(hw_install(&inf, "srv1", "sodimm-ddr4-16gb"), -3);
+}
+
+TEST(hw_install_sodimm_mem_gen_mismatch) {
+    /* atom-d510 est DDR3, sodimm-ddr4-16gb est DDR4 → -5 */
+    Infra inf = make_infra_with_model("nuc-i5");
+    hw_install(&inf, "srv1", "atom-d510");
+    ASSERT_EQ(hw_install(&inf, "srv1", "sodimm-ddr4-16gb"), -5);
+}
+
+TEST(hw_recompute_sodimm_counts_as_ram) {
+    Infra inf = make_infra_with_model("nuc-i5");
+    hw_install(&inf, "srv1", "sodimm-ddr4-8gb");
+    hw_install(&inf, "srv1", "sodimm-ddr4-16gb");
+    ASSERT_EQ(inf.servers[0].ram_mb, 8192 + 16384);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -329,6 +472,14 @@ int main(void) {
     hw_remove_unknown_server();
     hw_remove_unknown_comp();
 
+    puts("-- compatibilite socket CPU --");
+    hw_install_socket_epyc_in_nuc_refused();
+    hw_install_socket_atom_in_nuc_ok();
+    hw_install_socket_epyc_in_generic_ok();
+    hw_install_socket_epyc_in_r740_ok();
+    hw_install_socket_xeon_e3_in_r740_refused();
+    hw_install_socket_no_model_any_cpu_ok();
+
     puts("-- compatibilite memoire DIMM->CPU --");
     hw_install_dimm_before_cpu_mismatch();
     hw_install_dimm_before_cpu_match();
@@ -341,10 +492,26 @@ int main(void) {
     puts("-- hw_server_init_slots --");
     hw_server_init_slots_default();
     hw_server_init_slots_model();
+    hw_server_init_slots_nuc();
 
     puts("-- hw_prop --");
     hw_prop_found();
     hw_prop_not_found();
+
+    puts("-- facteur de forme disque --");
+    hw_install_hdd_in_sata35_ok();
+    hw_install_ssd_in_sata25_ok();
+    hw_install_hdd_in_sata25_refused();
+    hw_install_ssd_in_sata35_refused();
+    hw_install_nvme_u3_ok();
+    hw_install_u2_in_u3_refused();
+
+    puts("-- SO-DIMM vs DIMM --");
+    hw_install_sodimm_in_nuc_ok();
+    hw_install_dimm_in_nuc_refused();
+    hw_install_sodimm_in_rack_refused();
+    hw_install_sodimm_mem_gen_mismatch();
+    hw_recompute_sodimm_counts_as_ram();
 
     puts("-- hw_list_catalog --");
     hw_list_catalog_all();

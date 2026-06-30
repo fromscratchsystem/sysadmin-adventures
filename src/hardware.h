@@ -44,8 +44,9 @@ typedef struct {
 typedef struct {
     char    id[32];
     char    label[64];
-    int     size_u;      /* 0 = mini PC (2 par 1U) */
-    int     has_ipmi;    /* 0 = pas d'IPMI */
+    int     size_u;          /* 0 = mini PC (2 par 1U) */
+    int     has_ipmi;        /* 0 = pas d'IPMI */
+    char    cpu_socket[16];  /* socket CPU requis, "" = tout socket */
     SlotDef slots[MAX_SLOT_DEFS];
     int     nslot_defs;
 } ServerModel;
@@ -69,7 +70,8 @@ void hw_server_init_slots(PhysServer *srv, const char *model_id);
  *          -2 : serveur inconnu
  *          -3 : aucun slot libre de ce type sur ce serveur
  *          -4 : serveur allumé
- *          -5 : incompatibilité (ex : génération mémoire)
+ *          -5 : incompatibilité génération mémoire (DDR3/4/5)
+ *          -6 : incompatibilité socket CPU (ex : SP3 vs NUC)
  */
 int hw_install(Infra *inf, const char *server, const char *comp_id);
 int hw_remove (Infra *inf, const char *server, const char *comp_id);
