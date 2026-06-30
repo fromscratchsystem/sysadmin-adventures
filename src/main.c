@@ -601,6 +601,7 @@ static void cmd_cable(const char *sub, Infra *inf, Panel *nar)
             infra_save(inf, infra_path());
         } else if (rc == -2) { narrator_say(nar, "Serveur ou switch inconnu.");
         } else if (rc == -3) { narrator_say(nar, "Cette NIC est deja cablee.");
+        } else if (rc == -4) { narrator_printf(nar, "Port invalide (1-%d).", port);
         } else               { narrator_say(nar, "Limite de cables atteinte."); }
 
     } else if (strcmp(sub, "list") == 0) {

@@ -238,6 +238,39 @@ TEST(cable_connect_unknown_server) {
     ASSERT_EQ(infra_cable_connect(&inf, "ghost", "eth0", "sw1", 1), -2);
 }
 
+TEST(cable_connect_port_zero) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    infra_switch_add(&inf, "sw1",  "rack-A", 5, 1, 24);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth0", "sw1", 0), -4);
+    ASSERT_EQ(inf.ncables, 0);
+}
+
+TEST(cable_connect_port_negative) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    infra_switch_add(&inf, "sw1",  "rack-A", 5, 1, 24);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth0", "sw1", -5), -4);
+    ASSERT_EQ(inf.ncables, 0);
+}
+
+TEST(cable_connect_port_exceeds_capacity) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    infra_switch_add(&inf, "sw1",  "rack-A", 5, 1, 24);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth0", "sw1", 25), -4);
+    ASSERT_EQ(inf.ncables, 0);
+}
+
+TEST(cable_connect_port_boundary) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    infra_switch_add(&inf, "sw1",  "rack-A", 5, 1, 24);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth0", "sw1",  1), 0);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth1", "sw1", 24), 0);
+    ASSERT_EQ(inf.ncables, 2);
+}
+
 TEST(cable_disconnect_basic) {
     Infra inf = make_infra_with_rack();
     infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
@@ -427,6 +460,10 @@ int main(void) {
     cable_connect_basic();
     cable_connect_dup_nic();
     cable_connect_unknown_server();
+    cable_connect_port_zero();
+    cable_connect_port_negative();
+    cable_connect_port_exceeds_capacity();
+    cable_connect_port_boundary();
     cable_disconnect_basic();
     cable_disconnect_unknown();
     cable_server_nets();

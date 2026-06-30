@@ -111,7 +111,9 @@ int infra_cable_connect(Infra *inf, const char *server, const char *nic,
                         const char *sw, int port) {
     if (inf->ncables >= MAX_CABLES)      return -1;
     if (!infra_find_server(inf, server)) return -2;
-    if (!infra_find_switch(inf, sw))     return -2;
+    PhysSwitch *psw = infra_find_switch(inf, sw);
+    if (!psw)                            return -2;
+    if (port < 1 || port > psw->ports)  return -4;
     for (int i = 0; i < inf->ncables; i++)
         if (strcmp(inf->cables[i].server, server) == 0 &&
             strcmp(inf->cables[i].nic,    nic)    == 0) return -3;
