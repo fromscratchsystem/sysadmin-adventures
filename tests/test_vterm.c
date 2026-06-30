@@ -216,6 +216,195 @@ TEST(vterm_scroll_clamp_min) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+ * Suite : mouvements curseur CSI supplémentaires
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(csi_cursor_down) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[3B");   /* CUD 3 → crow = 3 */
+    ASSERT_EQ(vt->crow, 3);
+    vterm_free(vt);
+}
+
+TEST(csi_cursor_forward) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[5C");   /* CUF 5 → ccol = 5 */
+    ASSERT_EQ(vt->ccol, 5);
+    vterm_free(vt);
+}
+
+TEST(csi_cursor_back) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[10C");  /* CUF 10 */
+    feed(vt, "\x1b[3D");   /* CUB 3 → ccol = 7 */
+    ASSERT_EQ(vt->ccol, 7);
+    vterm_free(vt);
+}
+
+TEST(csi_cursor_position_default) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[5;8H"); /* aller en 5;8 */
+    feed(vt, "\x1b[H");    /* CUP sans params → 1;1 → crow=0, ccol=0 */
+    ASSERT_EQ(vt->crow, 0);
+    ASSERT_EQ(vt->ccol, 0);
+    vterm_free(vt);
+}
+
+TEST(cursor_clamp_cup) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\x1b[99;99H"); /* CUP hors limites */
+    ASSERT_EQ(vt->crow, 4);  /* clamped à rows-1 */
+    ASSERT_EQ(vt->ccol, 9);  /* clamped à cols-1 */
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : effacement CSI supplémentaire
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(csi_erase_display_all) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "ABCDE");
+    feed(vt, "\x1b[2J");   /* ED2 : efface tout l'écran */
+    ASSERT_EQ(cell_ch(vt, 0, 0), ' ');
+    ASSERT_EQ(cell_ch(vt, 0, 4), ' ');
+    vterm_free(vt);
+}
+
+TEST(csi_erase_line_left) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "ABCDE");
+    /* Retour en col 3, puis EL1 (efface du début jusqu'à la position courante) */
+    feed(vt, "\r\x1b[3C\x1b[1K");
+    ASSERT_EQ(cell_ch(vt, 0, 0), ' ');
+    ASSERT_EQ(cell_ch(vt, 0, 3), ' ');
+    /* 'E' (col 4) doit rester intact */
+    ASSERT_EQ(cell_ch(vt, 0, 4), 'E');
+    vterm_free(vt);
+}
+
+TEST(csi_erase_line_all) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "ABCDE");
+    feed(vt, "\r\x1b[2K"); /* EL2 : efface toute la ligne */
+    ASSERT_EQ(cell_ch(vt, 0, 0), ' ');
+    ASSERT_EQ(cell_ch(vt, 0, 4), ' ');
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : séquences ESC
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(esc_save_restore_cursor) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[5;8H"); /* crow=4, ccol=7 */
+    feed(vt, "\x1b" "7"); /* DECSC : sauvegarde */
+    feed(vt, "\x1b[1;1H"); /* déplace ailleurs */
+    ASSERT_EQ(vt->crow, 0);
+    feed(vt, "\x1b" "8"); /* DECRC : restaure */
+    ASSERT_EQ(vt->crow, 4);
+    ASSERT_EQ(vt->ccol, 7);
+    vterm_free(vt);
+}
+
+TEST(esc_reverse_index) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\n\n");       /* crow = 2 */
+    feed(vt, "\x1b" "M");  /* RI : remonte d'une ligne → crow = 1 */
+    ASSERT_EQ(vt->crow, 1);
+    vterm_free(vt);
+}
+
+TEST(csi_scroll_region) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "\x1b[3;7r"); /* DECSTBM : région lignes 3–7 (base 1) → 2–6 (base 0) */
+    ASSERT_EQ(vt->scroll_top,    2);
+    ASSERT_EQ(vt->scroll_bottom, 6);
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : attributs SGR supplémentaires
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(sgr_underline) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\x1b[4m");    /* underline on */
+    ASSERT_NE(vt->cur_attrs & A_UNDERLINE, 0);
+    feed(vt, "\x1b[24m");   /* underline off */
+    ASSERT_EQ(vt->cur_attrs & A_UNDERLINE, 0);
+    vterm_free(vt);
+}
+
+TEST(sgr_reverse) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\x1b[7m");    /* reverse on */
+    ASSERT_NE(vt->cur_attrs & A_REVERSE, 0);
+    feed(vt, "\x1b[27m");   /* reverse off */
+    ASSERT_EQ(vt->cur_attrs & A_REVERSE, 0);
+    vterm_free(vt);
+}
+
+TEST(sgr_color_bg) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\x1b[42m");   /* bg vert : 42-39 = 3 */
+    ASSERT_EQ(vt->cur_bg, 3);
+    vterm_free(vt);
+}
+
+TEST(sgr_bright_fg) {
+    VTerm *vt = vterm_new(5, 10, 8);
+    feed(vt, "\x1b[91m");   /* bright red : 91-89=2, + A_BOLD */
+    ASSERT_EQ(vt->cur_fg, 2);
+    ASSERT_NE(vt->cur_attrs & A_BOLD, 0);
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : wrap de ligne
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(line_wrap) {
+    VTerm *vt = vterm_new(5, 5, 8);  /* 5 colonnes */
+    feed(vt, "ABCDE");  /* remplit la ligne 0 → wrap_pending=1 */
+    ASSERT_EQ(vt->crow, 0);
+    ASSERT_EQ(vt->wrap_pending, 1);
+    feed(vt, "X");      /* X force le passage à la ligne suivante */
+    ASSERT_EQ(vt->crow, 1);
+    ASSERT_EQ(cell_ch(vt, 1, 0), 'X');
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : scrollback supplémentaire
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(scrollback_multiple) {
+    VTerm *vt = vterm_new(3, 10, 8);
+    /* Dépasse 3 lignes : 2 lignes doivent aller dans le scrollback */
+    feed(vt, "AAA\r\nBBB\r\nCCC\r\nDDD\r\n");
+    ASSERT_EQ(vt->sb_count, 2);
+    ASSERT_EQ(sb_ch(vt, 0, 0), 'A');
+    ASSERT_EQ(sb_ch(vt, 1, 0), 'B');
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : vterm_resize
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(vterm_resize_basic) {
+    VTerm *vt = vterm_new(10, 20, 8);
+    feed(vt, "AB");
+    vterm_resize(vt, 5, 40);
+    ASSERT_EQ(vt->rows, 5);
+    ASSERT_EQ(vt->cols, 40);
+    ASSERT_EQ(vt->sb_count, 0);   /* scrollback réinitialisé */
+    vterm_free(vt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
  * Suite : écran alternatif
  * ═══════════════════════════════════════════════════════════════ */
 
@@ -255,21 +444,45 @@ int main(void) {
 
     puts("-- CSI --");
     csi_cursor_up();
+    csi_cursor_down();
+    csi_cursor_forward();
+    csi_cursor_back();
     csi_cursor_position();
+    csi_cursor_position_default();
+    cursor_clamp_cup();
     csi_erase_line();
+    csi_erase_display_all();
+    csi_erase_line_left();
+    csi_erase_line_all();
+    csi_scroll_region();
+
+    puts("-- ESC --");
+    esc_save_restore_cursor();
+    esc_reverse_index();
 
     puts("-- SGR --");
     sgr_bold();
     sgr_color_fg();
     sgr_reset();
     sgr_bold_written_to_cell();
+    sgr_underline();
+    sgr_reverse();
+    sgr_color_bg();
+    sgr_bright_fg();
+
+    puts("-- wrap --");
+    line_wrap();
 
     puts("-- scrollback --");
     scroll_pushes_to_scrollback();
     altscreen_no_scrollback();
+    scrollback_multiple();
     vterm_scroll_offset();
     vterm_scroll_clamp_max();
     vterm_scroll_clamp_min();
+
+    puts("-- resize --");
+    vterm_resize_basic();
 
     puts("-- altscreen --");
     altscreen_switch();

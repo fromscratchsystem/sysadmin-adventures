@@ -325,6 +325,233 @@ TEST(cable_server_nets) {
  * Suite : Persistance
  * ═══════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : limites MAX
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(server_add_limit) {
+    Infra inf = {0};
+    infra_rack_create(&inf, "rack-A", 42);
+    for (int i = 0; i < MAX_SERVERS; i++) {
+        char name[16]; snprintf(name, sizeof(name), "s%d", i);
+        ASSERT_EQ(infra_server_add(&inf, name, "rack-A", i + 1, 1, 1, 1024, 100), 0);
+    }
+    ASSERT_EQ(infra_server_add(&inf, "overflow", "rack-A", MAX_SERVERS + 1, 1, 1, 1024, 100), -1);
+    ASSERT_EQ(inf.nservers, MAX_SERVERS);
+}
+
+TEST(switch_add_duplicate) {
+    Infra inf = make_infra_with_rack();
+    infra_switch_add(&inf, "sw1", "rack-A", 1, 1, 24);
+    ASSERT_EQ(infra_switch_add(&inf, "sw1", "rack-A", 5, 1, 48), -3);
+    ASSERT_EQ(inf.nswitches, 1);
+}
+
+TEST(switch_add_limit) {
+    Infra inf = {0};
+    infra_rack_create(&inf, "rack-A", 42);
+    for (int i = 0; i < MAX_SWITCHES; i++) {
+        char name[16]; snprintf(name, sizeof(name), "sw%d", i);
+        ASSERT_EQ(infra_switch_add(&inf, name, "rack-A", i + 1, 1, 24), 0);
+    }
+    ASSERT_EQ(infra_switch_add(&inf, "sw-overflow", "rack-A", MAX_SWITCHES + 1, 1, 24), -1);
+    ASSERT_EQ(inf.nswitches, MAX_SWITCHES);
+}
+
+TEST(switch_delete_unknown) {
+    Infra inf = {0};
+    ASSERT_EQ(infra_switch_delete(&inf, "ghost-sw"), -1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : câbles — cas supplémentaires
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(cable_connect_unknown_switch) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    ASSERT_EQ(infra_cable_connect(&inf, "srv1", "eth0", "ghost-sw", 1), -2);
+    ASSERT_EQ(inf.ncables, 0);
+}
+
+TEST(server_nets_no_cables) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    const char *nets[4];
+    ASSERT_EQ(infra_server_nets(&inf, "srv1", nets, 4), 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : infra_server_add_model / infra_minipc_add
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(server_add_model_basic) {
+    Infra inf = make_infra_with_rack();
+    ASSERT_EQ(infra_server_add_model(&inf, "web01", "rack-A", 1, 1, 0, "dell-r240"), 0);
+    PhysServer *s = infra_find_server(&inf, "web01");
+    ASSERT_NN(s);
+    ASSERT_STR(s->model_id, "dell-r240");
+    ASSERT_EQ(s->has_ipmi, 0);
+}
+
+TEST(minipc_add_basic) {
+    Infra inf = make_infra_with_rack();
+    ASSERT_EQ(infra_minipc_add(&inf, "nuc1", "rack-A", 5, "nuc-i5"), 0);
+    PhysServer *s = infra_find_server(&inf, "nuc1");
+    ASSERT_NN(s);
+    ASSERT_EQ(s->is_minipc, 1);
+    ASSERT_EQ(s->subslot,   0);
+    ASSERT_STR(s->model_id, "nuc-i5");
+}
+
+TEST(minipc_add_two_per_slot) {
+    Infra inf = make_infra_with_rack();
+    infra_minipc_add(&inf, "nuc1", "rack-A", 5, "");
+    ASSERT_EQ(infra_minipc_add(&inf, "nuc2", "rack-A", 5, ""), 0);
+    PhysServer *s1 = infra_find_server(&inf, "nuc1");
+    PhysServer *s2 = infra_find_server(&inf, "nuc2");
+    ASSERT_NN(s1); ASSERT_NN(s2);
+    ASSERT_NE(s1->subslot, s2->subslot);
+}
+
+TEST(minipc_add_slot_full) {
+    Infra inf = make_infra_with_rack();
+    infra_minipc_add(&inf, "nuc1", "rack-A", 5, "");
+    infra_minipc_add(&inf, "nuc2", "rack-A", 5, "");
+    ASSERT_EQ(infra_minipc_add(&inf, "nuc3", "rack-A", 5, ""), -5);
+    ASSERT_EQ(inf.nservers, 2);
+}
+
+TEST(minipc_add_bad_rack) {
+    Infra inf = {0};
+    ASSERT_EQ(infra_minipc_add(&inf, "nuc1", "ghost-rack", 1, ""), -2);
+}
+
+TEST(minipc_add_duplicate) {
+    Infra inf = make_infra_with_rack();
+    infra_minipc_add(&inf, "nuc1", "rack-A", 1, "");
+    ASSERT_EQ(infra_minipc_add(&inf, "nuc1", "rack-A", 3, ""), -3);
+    ASSERT_EQ(inf.nservers, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : fonctions list_*
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(list_racks_empty) {
+    Infra inf = {0};
+    char lines[4][128]; int nl = 0;
+    infra_list_racks(&inf, lines, &nl, 4);
+    ASSERT_EQ(nl, 1);
+    ASSERT_NE(strstr(lines[0], "aucune"), NULL);
+}
+
+TEST(list_racks_basic) {
+    Infra inf = {0};
+    infra_rack_create(&inf, "rack-A", 42);
+    infra_rack_create(&inf, "rack-B", 24);
+    char lines[8][128]; int nl = 0;
+    infra_list_racks(&inf, lines, &nl, 8);
+    ASSERT_EQ(nl, 2);
+    ASSERT_NE(strstr(lines[0], "rack-A"), NULL);
+    ASSERT_NE(strstr(lines[1], "rack-B"), NULL);
+}
+
+TEST(list_servers_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "s1", "rack-A", 1, 1, 4, 8192, 200);
+    infra_server_add(&inf, "s2", "rack-A", 2, 1, 8, 16384, 500);
+    char lines[8][128]; int nl = 0;
+    infra_list_servers(&inf, NULL, lines, &nl, 8);
+    ASSERT_EQ(nl, 2);
+}
+
+TEST(list_servers_filtered_by_rack) {
+    Infra inf = {0};
+    infra_rack_create(&inf, "rack-A", 42);
+    infra_rack_create(&inf, "rack-B", 42);
+    infra_server_add(&inf, "s1", "rack-A", 1, 1, 4, 8192, 200);
+    infra_server_add(&inf, "s2", "rack-B", 1, 1, 4, 8192, 200);
+    char lines[8][128]; int nl = 0;
+    infra_list_servers(&inf, "rack-A", lines, &nl, 8);
+    ASSERT_EQ(nl, 1);
+    ASSERT_NE(strstr(lines[0], "s1"), NULL);
+}
+
+TEST(list_switches_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_switch_add(&inf, "sw1", "rack-A", 1, 1, 24);
+    char lines[4][128]; int nl = 0;
+    infra_list_switches(&inf, NULL, lines, &nl, 4);
+    ASSERT_EQ(nl, 1);
+    ASSERT_NE(strstr(lines[0], "sw1"), NULL);
+}
+
+TEST(list_cables_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "srv1", "rack-A", 1, 1, 1, 1024, 100);
+    infra_switch_add(&inf, "sw1",  "rack-A", 5, 1, 24);
+    infra_cable_connect(&inf, "srv1", "eth0", "sw1", 3);
+    char lines[4][128]; int nl = 0;
+    infra_list_cables(&inf, lines, &nl, 4);
+    ASSERT_EQ(nl, 1);
+    ASSERT_NE(strstr(lines[0], "srv1"), NULL);
+    ASSERT_NE(strstr(lines[0], "eth0"), NULL);
+}
+
+TEST(list_cables_empty) {
+    Infra inf = {0};
+    char lines[4][128]; int nl = 0;
+    infra_list_cables(&inf, lines, &nl, 4);
+    ASSERT_EQ(nl, 1);
+    ASSERT_NE(strstr(lines[0], "aucun"), NULL);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : rack_render
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(rack_render_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "web01", "rack-A", 1, 1, 4, 8192, 200);
+    infra_switch_add(&inf, "sw1",   "rack-A", 3, 1, 24);
+    char lines[64][128]; int nl = 0;
+    infra_rack_render(&inf, "rack-A", lines, &nl, 64);
+    ASSERT_GT(nl, 2);
+    ASSERT_NE(strstr(lines[0], "rack-A"), NULL);
+    int found_srv = 0, found_sw = 0;
+    for (int i = 0; i < nl; i++) {
+        if (strstr(lines[i], "web01")) found_srv = 1;
+        if (strstr(lines[i], "sw1"))   found_sw  = 1;
+    }
+    ASSERT_EQ(found_srv, 1);
+    ASSERT_EQ(found_sw,  1);
+}
+
+TEST(rack_render_unknown) {
+    Infra inf = {0};
+    char lines[4][128]; int nl = 0;
+    infra_rack_render(&inf, "ghost", lines, &nl, 4);
+    ASSERT_GT(nl, 0);
+    ASSERT_NE(strstr(lines[0], "ghost"), NULL);
+}
+
+TEST(rack_render_with_minipc) {
+    Infra inf = make_infra_with_rack();
+    infra_minipc_add(&inf, "nuc1", "rack-A", 5, "");
+    infra_minipc_add(&inf, "nuc2", "rack-A", 5, "");
+    char lines[64][128]; int nl = 0;
+    infra_rack_render(&inf, "rack-A", lines, &nl, 64);
+    int found_mini = 0;
+    for (int i = 0; i < nl; i++)
+        if (strstr(lines[i], "MNI")) found_mini = 1;
+    ASSERT_EQ(found_mini, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Suite : Persistance
+ * ═══════════════════════════════════════════════════════════════ */
+
 TEST(save_load_roundtrip) {
     const char *path = "/tmp/test_infra_roundtrip.inf";
 
@@ -476,6 +703,9 @@ int main(void) {
     switch_delete_off();
     switch_delete_on();
     switch_delete_removes_cables();
+    switch_add_duplicate();
+    switch_add_limit();
+    switch_delete_unknown();
 
     puts("-- cables --");
     cable_connect_basic();
@@ -490,6 +720,33 @@ int main(void) {
     cable_disconnect_basic();
     cable_disconnect_unknown();
     cable_server_nets();
+    cable_connect_unknown_switch();
+    server_nets_no_cables();
+
+    puts("-- limites --");
+    server_add_limit();
+
+    puts("-- server_add_model / minipc --");
+    server_add_model_basic();
+    minipc_add_basic();
+    minipc_add_two_per_slot();
+    minipc_add_slot_full();
+    minipc_add_bad_rack();
+    minipc_add_duplicate();
+
+    puts("-- list_* --");
+    list_racks_empty();
+    list_racks_basic();
+    list_servers_basic();
+    list_servers_filtered_by_rack();
+    list_switches_basic();
+    list_cables_basic();
+    list_cables_empty();
+
+    puts("-- rack_render --");
+    rack_render_basic();
+    rack_render_unknown();
+    rack_render_with_minipc();
 
     puts("-- show --");
     server_show_basic();

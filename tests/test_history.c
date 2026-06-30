@@ -102,6 +102,43 @@ TEST(next_at_end) {
     ASSERT_EQ(history_next(&h, buf, CMD_MAX, saved), 0);
 }
 
+TEST(next_middle_not_end) {
+    reset();
+    history_push(&h, "cmd1");
+    history_push(&h, "cmd2");
+    history_push(&h, "cmd3");
+    strncpy(buf, "draft", CMD_MAX - 1);
+    history_prev(&h, buf, CMD_MAX, saved); /* sauvegarde "draft", buf=cmd3 */
+    history_prev(&h, buf, CMD_MAX, saved); /* buf=cmd2, cursor=1           */
+    /* next → cmd3, pas encore en fin d'historique */
+    ASSERT_EQ(history_next(&h, buf, CMD_MAX, saved), 1);
+    ASSERT_STR(buf, "cmd3");
+    /* un second next → fin → restaure le brouillon original */
+    ASSERT_EQ(history_next(&h, buf, CMD_MAX, saved), 1);
+    ASSERT_STR(buf, "draft");
+}
+
+TEST(push_empty_string) {
+    reset();
+    history_push(&h, "");
+    ASSERT_EQ(h.count, 1);
+    history_push(&h, "");   /* doublon consécutif → ignoré */
+    ASSERT_EQ(h.count, 1);
+}
+
+TEST(prev_after_wrap) {
+    reset();
+    for (int i = 0; i < HISTORY_MAX + 2; i++) {
+        char cmd[16]; snprintf(cmd, sizeof(cmd), "c%d", i);
+        history_push(&h, cmd);
+    }
+    ASSERT_EQ(h.cursor, h.count);
+    ASSERT_EQ(history_prev(&h, buf, CMD_MAX, saved), 1);
+    char expected[16];
+    snprintf(expected, sizeof(expected), "c%d", HISTORY_MAX + 1);
+    ASSERT_STR(buf, expected);
+}
+
 /* ═══════════════════════════════════════════════════════════════
  * main
  * ═══════════════════════════════════════════════════════════════ */
@@ -118,5 +155,8 @@ int main(void) {
     next_back_to_end();
     next_restores_saved_input();
     next_at_end();
+    next_middle_not_end();
+    push_empty_string();
+    prev_after_wrap();
     RESULTS();
 }
