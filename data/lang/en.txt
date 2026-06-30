@@ -1,0 +1,141 @@
+# English translation for sysadmin-adventures
+# Format: french source string=english translation
+# Lines starting with # are comments
+# Note: preserve printf format specifiers (%s, %d, %f) exactly as-is
+
+# ── Narrateur : réactions aux commandes shell ──────────────────────────
+Supprimer la racine. Classique.=Deleting root. Classic.
+Non. Cible un chemin precis, pas '/'.=No. Target a specific path, not '/'.
+Une fork bomb. Vraiment ? Non.=A fork bomb. Really? No.
+Oh. Tu sais faire 'ls'. Epoustouflant.=Oh. You know how to type 'ls'. Impressive.
+Tu sais ou tu es. Bravo. Vraiment.=You know where you are. Congrats. Really.
+Tiens, quelqu'un qui lit la doc. Presque fier.=Someone who reads the docs. Almost proud.
+Tu n'es pas root. Tu ne seras jamais root. Accepte-le.=You're not root. You'll never be root. Accept it.
+RTFM. C'est tout l'aide dont tu as besoin.=RTFM. That's all the help you need.
+
+# ── Narrateur : introduction ───────────────────────────────────────────
+Bien. Tu existes. Felicitations.=Well. You exist. Congratulations.
+C'est probablement ton seul succes de la journee.=That's probably your only achievement today.
+Tu geres un datacenter. Essaie de ne pas tout faire planter.=You manage a datacenter. Try not to break everything.
+Commence par taper 'ls'. Si t'es capable.=Start by typing 'ls'. If you can manage that.
+
+# ── Interface ──────────────────────────────────────────────────────────
+[terminal redimensionne]=[terminal resized]
+
+# ── Reconnexion / SSH ──────────────────────────────────────────────────
+Reconnexion a '%s'...=Reconnecting to '%s'...
+Echec de reconnexion a '%s'.=Failed to reconnect to '%s'.
+Connexion a '%s' perdue. Pas d'IPMI !=Connection to '%s' lost. No IPMI!
+  Intervention physique requise. Appelez un technicien.=  Physical access required. Call a technician.
+Connexion au conteneur perdue.=Container connection lost.
+
+# ── /network ───────────────────────────────────────────────────────────
+Usage : /network create <nom>=Usage: /network create <name>
+Reseau '%s' cree.=Network '%s' created.
+Echec de la creation du reseau.=Failed to create the network.
+Usage : /network delete <nom>=Usage: /network delete <name>
+Reseau '%s' supprime.=Network '%s' deleted.
+Echec de la suppression du reseau.=Failed to delete the network.
+Usage : /network create|delete <nom>=Usage: /network create|delete <name>
+
+# ── /deploy ────────────────────────────────────────────────────────────
+Usage : /deploy <nom> [image] [--networks net1,net2]=Usage: /deploy <name> [image] [--networks net1,net2]
+Limite de conteneurs atteinte (8 max).=Container limit reached (8 max).
+Deploiement de '%s' en cours...=Deploying '%s'...
+Operationnel. F%d pour y acceder.=Ready. F%d to access it.
+Echec du deploiement de '%s'.=Failed to deploy '%s'.
+
+# ── /stop ──────────────────────────────────────────────────────────────
+Usage : /stop <nom>=Usage: /stop <name>
+Aucun conteneur '%s' connu.=No container '%s' found.
+Conteneur '%s' arrete.=Container '%s' stopped.
+
+# ── /rack ──────────────────────────────────────────────────────────────
+Usage : /rack create <nom> [<units>]=Usage: /rack create <name> [<units>]
+Baie '%s' (%dU) creee.=Rack '%s' (%dU) created.
+Une baie de ce nom existe deja.=A rack with this name already exists.
+Limite de baies atteinte.=Rack limit reached.
+Usage : /rack delete <nom>=Usage: /rack delete <name>
+Baie '%s' supprimee.=Rack '%s' removed.
+Baie inconnue.=Unknown rack.
+Baie non vide (retirez les equipements d'abord).=Rack not empty (remove equipment first).
+Usage : /rack create|list|show|delete <nom>=Usage: /rack create|list|show|delete <name>
+
+# ── /server ────────────────────────────────────────────────────────────
+Usage : /server add <nom> <rack> <slot> <modele-id>=Usage: /server add <name> <rack> <slot> <model-id>
+  /server models pour voir les modeles disponibles=  /server models to see available models
+Slot plein (2 mini PCs max par 1U).=Slot full (2 mini PCs max per 1U).
+Serveur '%s' installe en %s slot %d.=Server '%s' installed in rack %s slot %d.
+Nom deja utilise.=Name already in use.
+Slot invalide (doit etre >= 1).=Invalid slot (must be >= 1).
+Slot occupe.=Slot already occupied.
+Limite de serveurs atteinte.=Server limit reached.
+Serveur inconnu.=Unknown server.
+Serveur deja allume.=Server already powered on.
+Trop de sessions actives.=Too many active sessions.
+Attention : pas d'IPMI. Acces physique requis en cas de panne.=Warning: no IPMI. Physical access required in case of failure.
+Demarrage de '%s'...=Starting '%s'...
+Echec du demarrage.=Failed to start.
+'%s' operationnel. F%d.='%s' operational. F%d.
+Echec de la connexion SSH.=SSH connection failed.
+Serveur deja eteint.=Server already powered off.
+'%s' eteint.='%s' powered off.
+Usage : /server show <nom>=Usage: /server show <name>
+Usage : /server add|poweron|poweroff|show|list|delete=Usage: /server add|poweron|poweroff|show|list|delete
+Modele '%s' inconnu. /server models=Model '%s' unknown. /server models
+Serveur '%s' retire.=Server '%s' removed.
+Serveur allume. Eteignez-le d'abord.=Server is on. Power it off first.
+Usage : /server delete <nom>=Usage: /server delete <name>
+
+# ── /switch ────────────────────────────────────────────────────────────
+Usage : /switch add <nom> <rack> <slot> [<U> [<ports>]]=Usage: /switch add <name> <rack> <slot> [<U> [<ports>]]
+Switch '%s' installe (%dp, reseau Podman cree).=Switch '%s' installed (%dp, Podman network created).
+Limite de switches atteinte.=Switch limit reached.
+Switch inconnu.=Unknown switch.
+Deja allume.=Already powered on.
+Deja eteint.=Already powered off.
+Usage : /switch show <nom>=Usage: /switch show <name>
+Usage : /switch add|poweron|poweroff|show|list|delete=Usage: /switch add|poweron|poweroff|show|list|delete
+Switch '%s' allume.=Switch '%s' powered on.
+Switch '%s' eteint.=Switch '%s' powered off.
+Switch '%s' retire (reseau Podman supprime).=Switch '%s' removed (Podman network deleted).
+Switch allume. Eteignez-le d'abord.=Switch is on. Power it off first.
+
+# ── /cable ─────────────────────────────────────────────────────────────
+Usage : /cable connect <srv>:<nic> <switch>:<port>=Usage: /cable connect <srv>:<nic> <switch>:<port>
+Cable : %s:%s -> %s:port%d=Cable: %s:%s -> %s:port%d
+Serveur ou switch inconnu.=Unknown server or switch.
+Cette NIC est deja cablee.=This NIC is already cabled.
+Port invalide (1-%d).=Invalid port (1-%d).
+Ce port du switch est deja occupe.=This switch port is already occupied.
+Limite de cables atteinte.=Cable limit reached.
+Usage : /cable disconnect <srv>:<nic>=Usage: /cable disconnect <srv>:<nic>
+Cable %s:%s deconnecte.=Cable %s:%s disconnected.
+Cable introuvable.=Cable not found.
+Usage : /cable connect|disconnect|list=Usage: /cable connect|disconnect|list
+
+# ── /hardware ──────────────────────────────────────────────────────────
+Usage : /hardware install <serveur> <comp-id>=Usage: /hardware install <server> <comp-id>
+Composant '%s' installe sur '%s'.=Component '%s' installed on '%s'.
+Composant '%s' inconnu. /hardware list=Component '%s' unknown. /hardware list
+Serveur '%s' inconnu.=Server '%s' unknown.
+Plus de slots libres (ou CPU deja installe).=No free slots (or CPU already installed).
+Eteignez le serveur avant d'intervenir.=Power off the server before working on it.
+Incompatibilite memoire : generation CPU/RAM differente.=Memory incompatibility: CPU/RAM generation mismatch.
+  Ex: DDR4 RAM ne fonctionne pas avec un CPU DDR3.=  Ex: DDR4 RAM does not work with a DDR3 CPU.
+Incompatibilite socket : ce CPU ne rentre pas dans ce chassis.=Socket incompatibility: this CPU does not fit in this chassis.
+  Ex: un EPYC SP3 ne s'installe pas dans un NUC.=  Ex: an EPYC SP3 cannot be installed in a NUC.
+Depassement PSU : puissance totale insuffisante.=PSU overload: total power draw exceeds capacity.
+  /hardware show <srv> pour voir la consommation actuelle.=  /hardware show <srv> to see current power usage.
+Usage : /hardware remove <serveur> <comp-id>=Usage: /hardware remove <server> <comp-id>
+Composant non installe sur ce serveur.=Component not installed on this server.
+Usage : /hardware show <serveur>=Usage: /hardware show <server>
+Usage : /hardware list|install|remove|show=Usage: /hardware list|install|remove|show
+  /hardware list [cpu|dimm|sata|m2|u2|pcie_x16|...]=  /hardware list [cpu|dimm|sata|m2|u2|pcie_x16|...]
+  /hardware install <srv> <comp-id>=  /hardware install <srv> <comp-id>
+  /hardware remove  <srv> <comp-id>=  /hardware remove  <srv> <comp-id>
+  /hardware show    <srv>=  /hardware show    <srv>
+
+# ── Commandes globales ─────────────────────────────────────────────────
+Commandes : /deploy /stop /network /rack /server /switch /cable /hardware /exit=Commands: /deploy /stop /network /rack /server /switch /cable /hardware /exit
+  /hardware list|install|remove|show  pour gerer le materiel=  /hardware list|install|remove|show  to manage hardware

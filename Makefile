@@ -51,7 +51,8 @@ CFTEST    = $(filter-out -pedantic,$(CFLAGS)) -I$(TESTDIR) -I$(SRCDIR)
 TEST_BINS = $(OBJDIR)/test_infra \
             $(OBJDIR)/test_hardware \
             $(OBJDIR)/test_history \
-            $(OBJDIR)/test_vterm
+            $(OBJDIR)/test_vterm \
+            $(OBJDIR)/test_lang
 
 .PHONY: test
 test: $(OBJDIR) $(TEST_BINS)
@@ -76,4 +77,7 @@ $(OBJDIR)/test_history: $(TESTDIR)/test_history.c $(SRCDIR)/history.c
 	$(CC) $(CFTEST) $^ -o $@
 
 $(OBJDIR)/test_vterm: $(TESTDIR)/test_vterm.c $(SRCDIR)/vterm.c
+	$(CC) $(CFTEST) $^ -o $@
+
+$(OBJDIR)/test_lang: $(TESTDIR)/test_lang.c $(SRCDIR)/lang.c
 	$(CC) $(CFTEST) $^ -o $@
