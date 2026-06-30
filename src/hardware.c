@@ -200,7 +200,7 @@ void hw_recompute(PhysServer *srv) {
         const HWComp *c = hw_find(srv->hw_ram[i]);
         if (c) total_ram += c->size_mb;
     }
-    if (total_ram > 0) srv->ram_mb = total_ram;
+    srv->ram_mb = total_ram;
 
     int total_disk = 0;
     for (int i = 0; i < HW_DISK_SLOTS; i++) {
@@ -208,7 +208,7 @@ void hw_recompute(PhysServer *srv) {
         const HWComp *c = hw_find(srv->hw_disk[i]);
         if (c) total_disk += c->size_gb;
     }
-    if (total_disk > 0) srv->disk_gb = total_disk;
+    srv->disk_gb = total_disk;
 }
 
 void hw_recompute_all(Infra *inf) {
@@ -281,16 +281,20 @@ int hw_remove(Infra *inf, const char *server, const char *comp_id) {
         if (strcmp(srv->hw_cpu, comp_id) != 0) return -1;
         srv->hw_cpu[0] = '\0';
     } else if (comp->type == HW_RAM) {
+        int max_r = (srv->max_ram_slots > 0 && srv->max_ram_slots < HW_RAM_SLOTS)
+                    ? srv->max_ram_slots : HW_RAM_SLOTS;
         int found = 0;
-        for (int i = 0; i < HW_RAM_SLOTS; i++) {
+        for (int i = 0; i < max_r; i++) {
             if (strcmp(srv->hw_ram[i], comp_id) == 0) {
                 srv->hw_ram[i][0] = '\0'; found = 1; break;
             }
         }
         if (!found) return -1;
     } else {
+        int max_d = (srv->max_disk_slots > 0 && srv->max_disk_slots < HW_DISK_SLOTS)
+                    ? srv->max_disk_slots : HW_DISK_SLOTS;
         int found = 0;
-        for (int i = 0; i < HW_DISK_SLOTS; i++) {
+        for (int i = 0; i < max_d; i++) {
             if (strcmp(srv->hw_disk[i], comp_id) == 0) {
                 srv->hw_disk[i][0] = '\0'; found = 1; break;
             }
@@ -468,7 +472,7 @@ void hw_show_server(const PhysServer *srv, char lines[][128], int *nlines, int m
     if (cs > 0 && ms > 0 && ds > 0) {
         int mn = cs; const char *bot = "CPU";
         if (ms < mn) { mn = ms; bot = "memoire"; }
-        if (ds < mn) {          bot = "stockage"; }
+        if (ds < mn) { mn = ds; bot = "stockage"; }
         if (mn < total / 3)
             addl(lines, nlines, max, "  Goulot  : %s", bot);
     }

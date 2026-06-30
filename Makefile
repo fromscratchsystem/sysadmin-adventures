@@ -46,6 +46,7 @@ TESTDIR   = tests
 CFTEST    = $(filter-out -pedantic,$(CFLAGS)) -I$(TESTDIR) -I$(SRCDIR)
 
 TEST_BINS = $(OBJDIR)/test_infra \
+            $(OBJDIR)/test_hardware \
             $(OBJDIR)/test_history \
             $(OBJDIR)/test_vterm
 
@@ -63,6 +64,9 @@ test: $(OBJDIR) $(TEST_BINS)
 	  else echo "✗  $$failed suite(s) en echec"; exit 1; fi
 
 $(OBJDIR)/test_infra: $(TESTDIR)/test_infra.c $(SRCDIR)/infra.c
+	$(CC) $(CFLAGS) -I$(SRCDIR) $^ -o $@
+
+$(OBJDIR)/test_hardware: $(TESTDIR)/test_hardware.c $(SRCDIR)/hardware.c $(SRCDIR)/infra.c
 	$(CC) $(CFLAGS) -I$(SRCDIR) $^ -o $@
 
 $(OBJDIR)/test_history: $(TESTDIR)/test_history.c $(SRCDIR)/history.c

@@ -418,6 +418,8 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
         } else if (*sc->nshells >= MAX_SHELLS) {
             narrator_say(nar, "Trop de sessions actives.");
         } else {
+            if (!srv->has_ipmi)
+                narrator_say(nar, "Attention : pas d'IPMI. Acces physique requis en cas de panne.");
             const char *nets[MAX_NETS];
             int nnets = infra_server_nets(inf, srv->name, nets, MAX_NETS);
             narrator_printf(nar, "Demarrage de '%s'...", srv->name);
@@ -601,7 +603,10 @@ static void cmd_cable(const char *sub, Infra *inf, Panel *nar)
             infra_save(inf, infra_path());
         } else if (rc == -2) { narrator_say(nar, "Serveur ou switch inconnu.");
         } else if (rc == -3) { narrator_say(nar, "Cette NIC est deja cablee.");
-        } else if (rc == -4) { narrator_printf(nar, "Port invalide (1-%d).", port);
+        } else if (rc == -4) {
+            PhysSwitch *psw = infra_find_switch(inf, swname);
+            narrator_printf(nar, "Port invalide (1-%d).", psw ? psw->ports : 0);
+        } else if (rc == -5) { narrator_say(nar, "Ce port du switch est deja occupe.");
         } else               { narrator_say(nar, "Limite de cables atteinte."); }
 
     } else if (strcmp(sub, "list") == 0) {

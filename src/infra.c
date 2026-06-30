@@ -70,6 +70,10 @@ int infra_server_add(Infra *inf, const char *name, const char *rack,
     if (slot < 1)                           return -4;
     if (!slot_free(inf, rack, slot, size_u)) return -5;
 
+    int port = PHYS_SSH_BASE;
+    for (int i = 0; i < inf->nservers; i++)
+        if (inf->servers[i].port >= port) port = inf->servers[i].port + 1;
+
     PhysServer *s = &inf->servers[inf->nservers];
     memset(s, 0, sizeof(*s));
     strncpy(s->name, name, 31);
@@ -80,7 +84,7 @@ int infra_server_add(Infra *inf, const char *name, const char *rack,
     s->ram_mb  = ram_mb  > 0 ? ram_mb  : 2048;
     s->disk_gb = disk_gb > 0 ? disk_gb : 100;
     s->powered = 0;
-    s->port    = PHYS_SSH_BASE + inf->nservers;
+    s->port    = port;
     s->has_ipmi       = 1;
     s->max_ram_slots  = HW_RAM_SLOTS;
     s->max_disk_slots = HW_DISK_SLOTS;
@@ -114,9 +118,12 @@ int infra_cable_connect(Infra *inf, const char *server, const char *nic,
     PhysSwitch *psw = infra_find_switch(inf, sw);
     if (!psw)                            return -2;
     if (port < 1 || port > psw->ports)  return -4;
-    for (int i = 0; i < inf->ncables; i++)
+    for (int i = 0; i < inf->ncables; i++) {
         if (strcmp(inf->cables[i].server, server) == 0 &&
             strcmp(inf->cables[i].nic,    nic)    == 0) return -3;
+        if (strcmp(inf->cables[i].sw,     sw)     == 0 &&
+            inf->cables[i].port == port)               return -5;
+    }
 
     Cable *c = &inf->cables[inf->ncables++];
     strncpy(c->server, server, 31);
@@ -189,8 +196,12 @@ int infra_minipc_add(Infra *inf, const char *name, const char *rack,
     s->cpu     = 1;
     s->ram_mb  = 2048;
     s->disk_gb = 100;
+    int mport = PHYS_SSH_BASE;
+    for (int i = 0; i < inf->nservers; i++)
+        if (inf->servers[i].port >= mport) mport = inf->servers[i].port + 1;
+
     s->powered = 0;
-    s->port    = PHYS_SSH_BASE + inf->nservers;
+    s->port    = mport;
     s->is_minipc      = 1;
     s->subslot        = subslot;
     s->has_ipmi       = 0;
@@ -578,7 +589,10 @@ void infra_load(Infra *inf, const char *path) {
                     infra_minipc_add(inf, name, rack, slot, max_ram, max_disk,
                                      (n >= 15 && model_id[0] && model_id[0] != '-') ? model_id : "");
                     PhysServer *s = infra_find_server(inf, name);
-                    if (s) { s->powered = powered; s->port = port; s->subslot = subslot; }
+                    if (s) {
+                        s->powered = powered; s->port = port; s->subslot = subslot;
+                        s->cpu = cpu; s->ram_mb = ram_mb; s->disk_gb = disk_gb;
+                    }
                 } else {
                     infra_server_add(inf, name, rack, slot, size_u, cpu, ram_mb, disk_gb);
                     PhysServer *s = infra_find_server(inf, name);

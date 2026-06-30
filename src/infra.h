@@ -105,6 +105,14 @@ int infra_minipc_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int max_ram, int max_disk, const char *model_id);
 int infra_switch_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int ports);
+/*
+ * Retourne  0 : succès
+ *          -1 : limite de câbles atteinte
+ *          -2 : serveur ou switch inconnu
+ *          -3 : cette NIC est déjà câblée
+ *          -4 : port hors plage (< 1 ou > switch.ports)
+ *          -5 : ce port du switch est déjà occupé
+ */
 int infra_cable_connect(Infra *inf, const char *server, const char *nic,
                         const char *sw, int port);
 
