@@ -931,7 +931,6 @@ int main(void) {
 
             case '\n':
             case KEY_ENTER:
-                input_buf[input_pos] = '\0';
                 if (strlen(input_buf) == 0) break;
 
                 history_push(&h, input_buf);
