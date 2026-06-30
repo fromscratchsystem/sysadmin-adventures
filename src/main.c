@@ -407,7 +407,10 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
 
         if (rc == 0) {
             PhysServer *srv = infra_find_server(inf, sname);
-            if (srv) hw_server_init_slots(srv, model_arg[0] ? model_arg : NULL);
+            if (srv) {
+                hw_server_init_slots(srv, model_arg[0] ? model_arg : NULL);
+                hw_recompute(srv);
+            }
             narrator_printf(nar, "Serveur '%s' installe en %s slot %d.", sname, srack, slot);
             infra_save(inf, infra_path());
         } else if (rc == -2) { narrator_say(nar, "Baie inconnue.");
