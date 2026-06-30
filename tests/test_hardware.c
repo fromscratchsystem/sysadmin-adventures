@@ -274,6 +274,52 @@ TEST(hw_install_socket_no_model_any_cpu_ok) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+ * Suite : contrainte PSU / TDP
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(hw_install_tdp_within_budget) {
+    /* nuc-i5 : 65W PSU — atom-d510 = 13W → OK */
+    Infra inf = make_infra_with_model("nuc-i5");
+    ASSERT_EQ(hw_install(&inf, "srv1", "atom-d510"), 0);
+}
+
+TEST(hw_install_tdp_exceeds_psu) {
+    /* dell-r740 : 1100W PSU, SP3
+     * 2x EPYC 7543 (450W) + 1x RTX 4090 (450W) = 900W → OK
+     * 2x RTX 4090 (900W) = 1350W → -7 */
+    Infra inf = make_infra_with_model("dell-r740");
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7543"), 0);   /* 225W */
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7543"), 0);   /* 450W */
+    ASSERT_EQ(hw_install(&inf, "srv1", "rtx-4090"),  0);   /* 900W */
+    ASSERT_EQ(hw_install(&inf, "srv1", "rtx-4090"),  -7);  /* 1350W > 1100W */
+}
+
+TEST(hw_install_tdp_no_model_unlimited) {
+    /* Serveur sans model_id → pas de limite PSU */
+    Infra inf = make_infra_with_server();
+    ASSERT_EQ(hw_install(&inf, "srv1", "epyc-7302"), 0);
+}
+
+TEST(hw_install_tdp_no_tdp_prop_ignored) {
+    /* Composant sans tdp_w ne consomme rien pour la vérification */
+    Infra inf = make_infra_with_model("nuc-i5");
+    hw_install(&inf, "srv1", "atom-d510"); /* 13W */
+    /* nvme-512gb a tdp_w=6W → 13+6=19W ≤ 65W → OK */
+    ASSERT_EQ(hw_install(&inf, "srv1", "nvme-512gb"), 0);
+}
+
+TEST(hw_show_server_displays_psu) {
+    Infra inf = make_infra_with_model("nuc-i5");
+    hw_install(&inf, "srv1", "atom-d510");
+    char lines[32][128]; int nl = 0;
+    hw_show_server(&inf.servers[0], lines, &nl, 32);
+    int found = 0;
+    for (int i = 0; i < nl; i++)
+        if (strstr(lines[i], "Alim") && strstr(lines[i], "65")) found = 1;
+    ASSERT_EQ(found, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
  * Suite : facteur de forme disque (sata35 / sata25)
  * ═══════════════════════════════════════════════════════════════ */
 
@@ -497,6 +543,13 @@ int main(void) {
     puts("-- hw_prop --");
     hw_prop_found();
     hw_prop_not_found();
+
+    puts("-- contrainte PSU/TDP --");
+    hw_install_tdp_within_budget();
+    hw_install_tdp_exceeds_psu();
+    hw_install_tdp_no_model_unlimited();
+    hw_install_tdp_no_tdp_prop_ignored();
+    hw_show_server_displays_psu();
 
     puts("-- facteur de forme disque --");
     hw_install_hdd_in_sata35_ok();

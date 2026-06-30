@@ -25,78 +25,89 @@ int         server_catalog_size = 0;
 static const HWComp hw_defaults[] = {
     /* CPU DDR3 */
     {"atom-d510",    "Intel Atom D510",           "cpu",
-     {{"cores","2"},{"ghz10","16"},{"mem_gen","DDR3"},{"socket","NUC"}}, 4},
+     {{"cores","2"},{"ghz10","16"},{"mem_gen","DDR3"},{"socket","NUC"},    {"tdp_w","13"}},  5},
     {"xeon-e3-1220", "Intel Xeon E3-1220 v3",     "cpu",
-     {{"cores","4"},{"ghz10","31"},{"mem_gen","DDR3"},{"socket","LGA1150"}}, 4},
+     {{"cores","4"},{"ghz10","31"},{"mem_gen","DDR3"},{"socket","LGA1150"},{"tdp_w","80"}},  5},
     {"xeon-e5-2670", "Intel Xeon E5-2670",         "cpu",
-     {{"cores","8"},{"ghz10","26"},{"mem_gen","DDR3"},{"socket","LGA2011"}}, 4},
+     {{"cores","8"},{"ghz10","26"},{"mem_gen","DDR3"},{"socket","LGA2011"},{"tdp_w","115"}}, 5},
     /* CPU DDR4 */
     {"epyc-7302",    "AMD EPYC 7302",              "cpu",
-     {{"cores","16"},{"ghz10","30"},{"mem_gen","DDR4"},{"socket","SP3"}}, 4},
+     {{"cores","16"},{"ghz10","30"},{"mem_gen","DDR4"},{"socket","SP3"},   {"tdp_w","155"}}, 5},
     {"epyc-7543",    "AMD EPYC 7543",              "cpu",
-     {{"cores","32"},{"ghz10","28"},{"mem_gen","DDR4"},{"socket","SP3"}}, 4},
+     {{"cores","32"},{"ghz10","28"},{"mem_gen","DDR4"},{"socket","SP3"},   {"tdp_w","225"}}, 5},
     /* CPU DDR5 */
     {"xeon-w3-2435", "Intel Xeon W3-2435",         "cpu",
-     {{"cores","8"},{"ghz10","31"},{"mem_gen","DDR5"},{"socket","LGA4677"}}, 4},
+     {{"cores","8"},{"ghz10","31"},{"mem_gen","DDR5"},{"socket","LGA4677"},{"tdp_w","165"}}, 5},
     /* RAM DDR3 DIMM ECC */
     {"ddr3-4gb",     "4 GB DDR3 ECC",              "dimm",
-     {{"size_mb","4096"},{"mem_gen","DDR3"}}, 2},
+     {{"size_mb","4096"}, {"mem_gen","DDR3"},{"tdp_w","3"}}, 3},
     {"ddr3-16gb",    "16 GB DDR3 ECC",             "dimm",
-     {{"size_mb","16384"},{"mem_gen","DDR3"}}, 2},
+     {{"size_mb","16384"},{"mem_gen","DDR3"},{"tdp_w","4"}}, 3},
     /* RAM DDR4 DIMM ECC */
     {"ddr4-16gb",    "16 GB DDR4 ECC",             "dimm",
-     {{"size_mb","16384"},{"mem_gen","DDR4"}}, 2},
+     {{"size_mb","16384"},{"mem_gen","DDR4"},{"tdp_w","3"}}, 3},
     {"ddr4-32gb",    "32 GB DDR4 ECC",             "dimm",
-     {{"size_mb","32768"},{"mem_gen","DDR4"}}, 2},
+     {{"size_mb","32768"},{"mem_gen","DDR4"},{"tdp_w","4"}}, 3},
     /* RAM DDR5 DIMM ECC */
     {"ddr5-32gb",    "32 GB DDR5 ECC",             "dimm",
-     {{"size_mb","32768"},{"mem_gen","DDR5"}}, 2},
+     {{"size_mb","32768"},{"mem_gen","DDR5"},{"tdp_w","4"}}, 3},
     {"ddr5-64gb",    "64 GB DDR5 ECC",             "dimm",
-     {{"size_mb","65536"},{"mem_gen","DDR5"}}, 2},
+     {{"size_mb","65536"},{"mem_gen","DDR5"},{"tdp_w","5"}}, 3},
+    /* RAM DDR3 SO-DIMM (mini PC) */
+    {"sodimm-ddr3-4gb",  "4 GB DDR3 SO-DIMM",     "sodimm",
+     {{"size_mb","4096"}, {"mem_gen","DDR3"},{"tdp_w","2"}}, 3},
     /* RAM DDR4 SO-DIMM (mini PC) */
     {"sodimm-ddr4-8gb",  "8 GB DDR4 SO-DIMM",     "sodimm",
-     {{"size_mb","8192"},{"mem_gen","DDR4"}}, 2},
+     {{"size_mb","8192"}, {"mem_gen","DDR4"},{"tdp_w","2"}}, 3},
     {"sodimm-ddr4-16gb", "16 GB DDR4 SO-DIMM",    "sodimm",
-     {{"size_mb","16384"},{"mem_gen","DDR4"}}, 2},
+     {{"size_mb","16384"},{"mem_gen","DDR4"},{"tdp_w","3"}}, 3},
     /* Disques HDD SATA 3.5" LFF */
     {"hdd-1tb",      "1 TB SATA HDD 3.5\"",        "sata35",
-     {{"size_gb","1000"},{"disk_type","HDD"},{"iops","150"}}, 3},
+     {{"size_gb","1000"},{"disk_type","HDD"},{"iops","150"},  {"tdp_w","8"}},  4},
     {"hdd-4tb",      "4 TB SATA HDD 3.5\"",        "sata35",
-     {{"size_gb","4000"},{"disk_type","HDD"},{"iops","150"}}, 3},
+     {{"size_gb","4000"},{"disk_type","HDD"},{"iops","150"},  {"tdp_w","9"}},  4},
     /* Disques SSD SATA 2.5" SFF */
     {"ssd-500gb",    "500 GB SATA SSD 2.5\"",      "sata25",
-     {{"size_gb","500"},{"disk_type","SSD"},{"iops","5000"}}, 3},
+     {{"size_gb","500"}, {"disk_type","SSD"},{"iops","5000"}, {"tdp_w","3"}},  4},
     {"ssd-2tb",      "2 TB SATA SSD 2.5\"",        "sata25",
-     {{"size_gb","2000"},{"disk_type","SSD"},{"iops","8000"}}, 3},
+     {{"size_gb","2000"},{"disk_type","SSD"},{"iops","8000"}, {"tdp_w","4"}},  4},
     /* NVMe M.2 */
     {"nvme-512gb",   "512 GB NVMe M.2",            "m2",
-     {{"size_gb","512"},{"disk_type","NVMe"},{"iops","20000"}}, 3},
+     {{"size_gb","512"}, {"disk_type","NVMe"},{"iops","20000"},{"tdp_w","6"}},  4},
     /* NVMe U.2 */
     {"nvme-2tb",     "2 TB NVMe U.2",              "u2",
-     {{"size_gb","2000"},{"disk_type","NVMe"},{"iops","60000"}}, 3},
+     {{"size_gb","2000"},{"disk_type","NVMe"},{"iops","60000"},{"tdp_w","10"}}, 4},
     /* NVMe U.3 enterprise */
     {"nvme-4tb-u3",  "4 TB NVMe U.3",              "u3",
-     {{"size_gb","4000"},{"disk_type","NVMe"},{"iops","120000"}}, 3},
+     {{"size_gb","4000"},{"disk_type","NVMe"},{"iops","120000"},{"tdp_w","15"}},4},
+    /* GPU PCIe */
+    {"rtx-4090",     "NVIDIA RTX 4090",             "pcie_x16",
+     {{"vram_gb","24"},{"tflops","82"},{"tdp_w","450"}}, 3},
+    {"a100-80gb",    "NVIDIA A100 80 GB SXM4",      "pcie_x16",
+     {{"vram_gb","80"},{"tflops","312"},{"tdp_w","400"}}, 3},
+    /* NIC PCIe */
+    {"mellanox-cx5", "Mellanox ConnectX-5 25GbE",   "pcie_x8",
+     {{"ports","2"},{"speed_mbps","25000"},{"tdp_w","15"}}, 3},
 };
 static const int hw_defaults_size =
     (int)(sizeof(hw_defaults) / sizeof(hw_defaults[0]));
 
 static const ServerModel srv_defaults[] = {
-    {"generic-1u", "Serveur rack 1U generique",     1, 1, "",
+    {"generic-1u", "Serveur rack 1U generique",     1, 1, "",        350,
      {{"cpu",1},{"dimm",4},{"sata25",4}}, 3},
-    {"generic-2u", "Serveur rack 2U generique",     2, 1, "",
+    {"generic-2u", "Serveur rack 2U generique",     2, 1, "",        750,
      {{"cpu",2},{"dimm",8},{"sata35",8}}, 3},
-    {"dell-r240",  "Dell PowerEdge R240 (1U)",      1, 1, "LGA1150",
+    {"dell-r240",  "Dell PowerEdge R240 (1U)",      1, 1, "LGA1150", 450,
      {{"cpu",1},{"dimm",4},{"sata35",4}}, 3},
-    {"hp-dl360",   "HP ProLiant DL360 Gen9 (1U)",   1, 1, "LGA2011",
+    {"hp-dl360",   "HP ProLiant DL360 Gen9 (1U)",   1, 1, "LGA2011", 500,
      {{"cpu",2},{"dimm",4},{"sata25",4}}, 3},
-    {"dell-r740",  "Dell PowerEdge R740 (2U)",      2, 1, "SP3",
+    {"dell-r740",  "Dell PowerEdge R740 (2U)",      2, 1, "SP3",    1100,
      {{"cpu",2},{"dimm",8},{"pcie_x16",3},{"u2",8}}, 4},
-    {"hp-dl380",   "HP ProLiant DL380 Gen10 (2U)",  2, 1, "SP3",
+    {"hp-dl380",   "HP ProLiant DL380 Gen10 (2U)",  2, 1, "SP3",     800,
      {{"cpu",2},{"dimm",8},{"sata25",4},{"u3",4},{"pcie_x16",2}}, 5},
-    {"nuc-i5",     "Intel NUC i5 (occasion)",       0, 0, "NUC",
+    {"nuc-i5",     "Intel NUC i5 (occasion)",       0, 0, "NUC",      65,
      {{"cpu",1},{"sodimm",2},{"m2",1}}, 3},
-    {"hp-prodesk", "HP ProDesk Mini G5 (occasion)", 0, 0, "LGA1150",
+    {"hp-prodesk", "HP ProDesk Mini G5 (occasion)", 0, 0, "LGA1150",  90,
      {{"cpu",1},{"sodimm",2},{"sata25",2}}, 3},
 };
 static const int srv_defaults_size =
@@ -250,9 +261,9 @@ int server_catalog_load(const char *path) {
         while (*p == ' ' || *p == '\t') p++;
         if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
 
-        /* Format: id | label | size_u | has_ipmi | cpu_socket | slot_type=count,... */
-        char fields[6][64];
-        int nf = split_pipe(p, fields, 6);
+        /* Format: id | label | size_u | has_ipmi | cpu_socket | psu_w | slot_type=count,... */
+        char fields[7][64];
+        int nf = split_pipe(p, fields, 7);
         if (nf < 5) continue;
 
         ServerModel *m = &server_catalog[server_catalog_size++];
@@ -261,7 +272,11 @@ int server_catalog_load(const char *path) {
         strncpy(m->label, fields[1], 63);
         m->size_u   = atoi(fields[2]);
         m->has_ipmi = atoi(fields[3]);
-        if (nf >= 6) {
+        if (nf >= 7) {
+            strncpy(m->cpu_socket, fields[4], 15);
+            m->psu_w = atoi(fields[5]);
+            parse_slot_defs(fields[6], m);
+        } else if (nf >= 6) {
             strncpy(m->cpu_socket, fields[4], 15);
             parse_slot_defs(fields[5], m);
         } else {
@@ -355,6 +370,23 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
         if (m && m->cpu_socket[0]) {
             const HWProp *sock = hw_prop(comp, "socket");
             if (!sock || strcmp(sock->val, m->cpu_socket) != 0) return -6;
+        }
+    }
+
+    /* Vérification capacité PSU */
+    if (srv->model_id[0]) {
+        const ServerModel *m = srv_model_find(srv->model_id);
+        if (m && m->psu_w > 0) {
+            int new_tdp = hw_prop_int(comp, "tdp_w", 0);
+            if (new_tdp > 0) {
+                int used = 0;
+                for (int i = 0; i < srv->nhw_slots; i++) {
+                    if (!srv->hw_slots[i].comp_id[0]) continue;
+                    const HWComp *c = hw_find(srv->hw_slots[i].comp_id);
+                    if (c) used += hw_prop_int(c, "tdp_w", 0);
+                }
+                if (used + new_tdp > m->psu_w) return -7;
+            }
         }
     }
 
@@ -536,11 +568,13 @@ void hw_show_server(const PhysServer *srv, char lines[][128], int *nlines, int m
     /* Scores */
     float cpu_score = 0.0f; int cs = 0, ms = 0, ds = 0, max_iops = 0;
     char cst[7]="", mst[7]="", dst[7]="";
+    int total_tdp = 0;
 
     for (int i = 0; i < srv->nhw_slots; i++) {
         if (!srv->hw_slots[i].comp_id[0]) continue;
         const HWComp *c = hw_find(srv->hw_slots[i].comp_id);
         if (!c) continue;
+        total_tdp += hw_prop_int(c, "tdp_w", 0);
         if (strcmp(c->slot_type, "cpu") == 0) {
             int cores = hw_prop_int(c, "cores", 0);
             int ghz10 = hw_prop_int(c, "ghz10", 0);
@@ -574,6 +608,18 @@ void hw_show_server(const PhysServer *srv, char lines[][128], int *nlines, int m
              srv->disk_gb, max_iops, dst);
     } else {
         addl(lines, nlines, max, "  Stockage  : N/A");
+    }
+    if (srv->model_id[0]) {
+        const ServerModel *m = srv_model_find(srv->model_id);
+        if (m && m->psu_w > 0) {
+            int pct = total_tdp * 100 / m->psu_w;
+            addl(lines, nlines, max, "  Alim      : %3d W / %4d W PSU  (%d%%)",
+                 total_tdp, m->psu_w, pct);
+        } else if (total_tdp > 0) {
+            addl(lines, nlines, max, "  Alim      : %3d W", total_tdp);
+        }
+    } else if (total_tdp > 0) {
+        addl(lines, nlines, max, "  Alim      : %3d W", total_tdp);
     }
 
     int total = cs + ms + ds;

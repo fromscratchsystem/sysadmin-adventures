@@ -684,6 +684,9 @@ static void cmd_hardware(const char *sub, Infra *inf, Panel *nar,
         } else if (rc == -6) {
             narrator_say(nar, "Incompatibilite socket : ce CPU ne rentre pas dans ce chassis.");
             narrator_say(nar, "  Ex: un EPYC SP3 ne s'installe pas dans un NUC.");
+        } else if (rc == -7) {
+            narrator_say(nar, "Depassement PSU : puissance totale insuffisante.");
+            narrator_say(nar, "  /hardware show <srv> pour voir la consommation actuelle.");
         }
 
     } else if (strncmp(sub, "remove ", 7) == 0) {

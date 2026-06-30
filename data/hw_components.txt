@@ -1,58 +1,61 @@
 # Catalogue de composants hardware
 # Format : slot_type | id | label | key=val | key=val | ...
-#   slot_type : cpu / dimm / sata / m2 / u2 / pcie_x16 / pcie_x8 / ...
-#   Propriétés CPU    : cores, ghz10 (fréq × 10), mem_gen
-#   Propriétés DIMM   : size_mb, mem_gen
-#   Propriétés disques: size_gb, disk_type, iops
+#   slot_type : cpu / dimm / sodimm / sata35 / sata25 / m2 / u2 / u3 / pcie_x16 / pcie_x8
+#   Propriétés CPU    : cores, ghz10 (fréq × 10), mem_gen, socket, tdp_w
+#   Propriétés DIMM   : size_mb, mem_gen, tdp_w
+#   Propriétés disques: size_gb, disk_type, iops, tdp_w
 #   Propriétés GPU    : vram_gb, tflops, tdp_w
 # Lignes commençant par # : commentaires
 
 # ── CPU – DDR3 ────────────────────────────────────────────────────────
-cpu | atom-d510    | Intel Atom D510           | cores=2  | ghz10=16 | mem_gen=DDR3 | socket=NUC
-cpu | xeon-e3-1220 | Intel Xeon E3-1220 v3     | cores=4  | ghz10=31 | mem_gen=DDR3 | socket=LGA1150
-cpu | xeon-e5-2670 | Intel Xeon E5-2670        | cores=8  | ghz10=26 | mem_gen=DDR3 | socket=LGA2011
+cpu | atom-d510    | Intel Atom D510           | cores=2  | ghz10=16 | mem_gen=DDR3 | socket=NUC     | tdp_w=13
+cpu | xeon-e3-1220 | Intel Xeon E3-1220 v3     | cores=4  | ghz10=31 | mem_gen=DDR3 | socket=LGA1150 | tdp_w=80
+cpu | xeon-e5-2670 | Intel Xeon E5-2670        | cores=8  | ghz10=26 | mem_gen=DDR3 | socket=LGA2011 | tdp_w=115
 
 # ── CPU – DDR4 ────────────────────────────────────────────────────────
-cpu | epyc-7302    | AMD EPYC 7302             | cores=16 | ghz10=30 | mem_gen=DDR4 | socket=SP3
-cpu | epyc-7543    | AMD EPYC 7543             | cores=32 | ghz10=28 | mem_gen=DDR4 | socket=SP3
+cpu | epyc-7302    | AMD EPYC 7302             | cores=16 | ghz10=30 | mem_gen=DDR4 | socket=SP3     | tdp_w=155
+cpu | epyc-7543    | AMD EPYC 7543             | cores=32 | ghz10=28 | mem_gen=DDR4 | socket=SP3     | tdp_w=225
 
 # ── CPU – DDR5 ────────────────────────────────────────────────────────
-cpu | xeon-w3-2435 | Intel Xeon W3-2435        | cores=8  | ghz10=31 | mem_gen=DDR5 | socket=LGA4677
+cpu | xeon-w3-2435 | Intel Xeon W3-2435        | cores=8  | ghz10=31 | mem_gen=DDR5 | socket=LGA4677 | tdp_w=165
 
 # ── RAM – DDR3 (DIMM ECC — serveurs rack) ────────────────────────────
-dimm | ddr3-4gb    | 4 GB DDR3 ECC             | size_mb=4096  | mem_gen=DDR3
-dimm | ddr3-16gb   | 16 GB DDR3 ECC            | size_mb=16384 | mem_gen=DDR3
+dimm | ddr3-4gb    | 4 GB DDR3 ECC             | size_mb=4096  | mem_gen=DDR3 | tdp_w=3
+dimm | ddr3-16gb   | 16 GB DDR3 ECC            | size_mb=16384 | mem_gen=DDR3 | tdp_w=4
 
 # ── RAM – DDR4 (DIMM ECC — serveurs rack) ────────────────────────────
-dimm | ddr4-16gb   | 16 GB DDR4 ECC            | size_mb=16384 | mem_gen=DDR4
-dimm | ddr4-32gb   | 32 GB DDR4 ECC            | size_mb=32768 | mem_gen=DDR4
+dimm | ddr4-16gb   | 16 GB DDR4 ECC            | size_mb=16384 | mem_gen=DDR4 | tdp_w=3
+dimm | ddr4-32gb   | 32 GB DDR4 ECC            | size_mb=32768 | mem_gen=DDR4 | tdp_w=4
 
 # ── RAM – DDR5 (DIMM ECC — serveurs rack) ────────────────────────────
-dimm | ddr5-32gb   | 32 GB DDR5 ECC            | size_mb=32768 | mem_gen=DDR5
-dimm | ddr5-64gb   | 64 GB DDR5 ECC            | size_mb=65536 | mem_gen=DDR5
+dimm | ddr5-32gb   | 32 GB DDR5 ECC            | size_mb=32768 | mem_gen=DDR5 | tdp_w=4
+dimm | ddr5-64gb   | 64 GB DDR5 ECC            | size_mb=65536 | mem_gen=DDR5 | tdp_w=5
+
+# ── RAM – DDR3 (SO-DIMM — mini PC) ───────────────────────────────────
+sodimm | sodimm-ddr3-4gb  | 4 GB DDR3 SO-DIMM  | size_mb=4096  | mem_gen=DDR3 | tdp_w=2
 
 # ── RAM – DDR4 (SO-DIMM — mini PC) ───────────────────────────────────
-sodimm | sodimm-ddr4-8gb  | 8 GB DDR4 SO-DIMM  | size_mb=8192  | mem_gen=DDR4
-sodimm | sodimm-ddr4-16gb | 16 GB DDR4 SO-DIMM | size_mb=16384 | mem_gen=DDR4
+sodimm | sodimm-ddr4-8gb  | 8 GB DDR4 SO-DIMM  | size_mb=8192  | mem_gen=DDR4 | tdp_w=2
+sodimm | sodimm-ddr4-16gb | 16 GB DDR4 SO-DIMM | size_mb=16384 | mem_gen=DDR4 | tdp_w=3
 
 # ── Disque – HDD SATA 3.5" (LFF) ─────────────────────────────────────
-sata35 | hdd-1tb   | 1 TB SATA HDD 3.5"        | size_gb=1000 | disk_type=HDD | iops=150
-sata35 | hdd-4tb   | 4 TB SATA HDD 3.5"        | size_gb=4000 | disk_type=HDD | iops=150
+sata35 | hdd-1tb   | 1 TB SATA HDD 3.5"        | size_gb=1000 | disk_type=HDD | iops=150   | tdp_w=8
+sata35 | hdd-4tb   | 4 TB SATA HDD 3.5"        | size_gb=4000 | disk_type=HDD | iops=150   | tdp_w=9
 
 # ── Disque – SSD SATA 2.5" (SFF) ─────────────────────────────────────
-sata25 | ssd-500gb | 500 GB SATA SSD 2.5"      | size_gb=500  | disk_type=SSD | iops=5000
-sata25 | ssd-2tb   | 2 TB SATA SSD 2.5"        | size_gb=2000 | disk_type=SSD | iops=8000
+sata25 | ssd-500gb | 500 GB SATA SSD 2.5"      | size_gb=500  | disk_type=SSD | iops=5000  | tdp_w=3
+sata25 | ssd-2tb   | 2 TB SATA SSD 2.5"        | size_gb=2000 | disk_type=SSD | iops=8000  | tdp_w=4
 
 # ── Disque – NVMe M.2 ─────────────────────────────────────────────────
-m2 | nvme-512gb    | 512 GB NVMe M.2           | size_gb=512  | disk_type=NVMe | iops=20000
+m2 | nvme-512gb    | 512 GB NVMe M.2           | size_gb=512  | disk_type=NVMe | iops=20000  | tdp_w=6
 
 # ── Disque – NVMe U.2 ─────────────────────────────────────────────────
-u2 | nvme-2tb      | 2 TB NVMe U.2             | size_gb=2000 | disk_type=NVMe | iops=60000
+u2 | nvme-2tb      | 2 TB NVMe U.2             | size_gb=2000 | disk_type=NVMe | iops=60000  | tdp_w=10
 
 # ── Disque – NVMe U.3 (enterprise, hot-plug) ──────────────────────────
-u3 | nvme-4tb-u3   | 4 TB NVMe U.3             | size_gb=4000 | disk_type=NVMe | iops=120000
+u3 | nvme-4tb-u3   | 4 TB NVMe U.3             | size_gb=4000 | disk_type=NVMe | iops=120000 | tdp_w=15
 
 # ── Cartes PCIe ───────────────────────────────────────────────────────
 pcie_x16 | rtx-4090     | NVIDIA RTX 4090            | vram_gb=24 | tflops=82  | tdp_w=450
 pcie_x16 | a100-80gb    | NVIDIA A100 80 GB SXM4     | vram_gb=80 | tflops=312 | tdp_w=400
-pcie_x8  | mellanox-cx5 | Mellanox ConnectX-5 25GbE  | ports=2    | speed_mbps=25000
+pcie_x8  | mellanox-cx5 | Mellanox ConnectX-5 25GbE  | ports=2    | speed_mbps=25000 | tdp_w=15
