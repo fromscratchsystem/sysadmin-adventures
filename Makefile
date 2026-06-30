@@ -10,6 +10,7 @@ OBJDIR  = build
 # ─── Sources et objets ────────────────────────────────────────
 SRCS = $(wildcard $(SRCDIR)/*.c)
 OBJS = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCS))
+DEPS = $(OBJS:.o=.d)
 
 TARGET = game
 
@@ -24,7 +25,9 @@ $(TARGET): $(OBJS)
 
 # ─── Compilation des .o ───────────────────────────────────────
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+-include $(DEPS)
 
 # ─── Création du dossier build ────────────────────────────────
 $(OBJDIR):

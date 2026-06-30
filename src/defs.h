@@ -66,7 +66,8 @@ typedef struct {
     int            alive;
     int            has_activity;  /* données reçues hors focus       */
     int            port;          /* port hôte SSH (pour persistance) */
-    char           name[32];      /* label de l'onglet               */
+    char           name[32];           /* label de l'onglet               */
+    char           container_name[32]; /* nom Podman réel ("" = principal) */
     char           extra_nets[MAX_NETS][32]; /* réseaux additionnels */
     int            nnets;
     struct VTerm  *vterm;         /* émulateur VT100                 */

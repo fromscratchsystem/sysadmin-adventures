@@ -82,15 +82,22 @@ static void shells_compact(Shell *shells, int *nshells, int *active) {
 
 /*
  * Ouvre un shell SSH vers un conteneur déjà en cours d'exécution.
+ * cname : nom Podman réel pour gérer sysadmin-net ("" = conteneur principal).
  * Retourne le nouvel index ou -1 si MAX_SHELLS atteint.
  */
 static int attach_shell(Shell *shells, int *nshells,
-        const char *name, int port, int rows, int cols)
+        const char *name, const char *cname, int port, int rows, int cols)
 {
     if (*nshells >= MAX_SHELLS) return -1;
+    if (cname && cname[0])
+        container_mgmt_connect(cname);
     int idx = *nshells;
     shells[idx] = shell_spawn(rows, cols, name, port);
-    if (!shells[idx].alive) return -1;
+    if (!shells[idx].alive) {
+        if (cname && cname[0]) container_mgmt_disconnect(cname);
+        return -1;
+    }
+    strncpy(shells[idx].container_name, cname ? cname : "", 31);
     (*nshells)++;
     return idx;
 }
@@ -106,7 +113,7 @@ static int game_deploy(Shell *shells, int *nshells,
     if (*nshells >= MAX_SHELLS) return -1;
     int port = CONTAINER_SSH_PORT + *nshells;
     if (container_deploy(name, image, port, extra_nets, nnets) != 0) return -1;
-    int idx = attach_shell(shells, nshells, name, port, rows, cols);
+    int idx = attach_shell(shells, nshells, name, name, port, rows, cols);
     if (idx >= 0) {
         shells[idx].nnets = nnets < MAX_NETS ? nnets : MAX_NETS;
         for (int i = 0; i < shells[idx].nnets; i++)
@@ -181,7 +188,7 @@ static void state_load(Shell *shells, int *nshells,
             narrator_printf(narrator, "Echec de reconnexion a '%s'.", name);
             continue;
         }
-        int idx = attach_shell(shells, nshells, name, port, rows, cols);
+        int idx = attach_shell(shells, nshells, name, name, port, rows, cols);
         if (idx < 0) {
             narrator_printf(narrator, "Echec de reconnexion a '%s'.", name);
             continue;
@@ -292,6 +299,8 @@ static void cmd_stop(const char *args, Panel *nar, ShCtx *sc)
         return;
     }
 
+    if (sc->shells[found].container_name[0])
+        container_mgmt_disconnect(sc->shells[found].container_name);
     shell_close(&sc->shells[found]);
     container_stop(name);
     narrator_printf(nar, "Conteneur '%s' arrete.", name);
@@ -430,7 +439,7 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
                 narrator_say(nar, "Echec du demarrage.");
             } else {
                 int idx = attach_shell(sc->shells, sc->nshells,
-                                       srv->name, srv->port, sh_rows, sh_cols);
+                                       srv->name, srv->name, srv->port, sh_rows, sh_cols);
                 if (idx >= 0) {
                     srv->powered = 1;
                     sc->shells[idx].nnets = nnets;
@@ -460,6 +469,8 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
                 if (sc->shells[i].alive && strcmp(sc->shells[i].name, srv->name) == 0)
                     { found = i; break; }
             if (found >= 0) {
+                if (sc->shells[found].container_name[0])
+                    container_mgmt_disconnect(sc->shells[found].container_name);
                 shell_close(&sc->shells[found]);
                 if (found == *sc->active) {
                     for (int j = 0; j < *sc->nshells; j++)
@@ -755,7 +766,7 @@ int main(void) {
     int   active  = 0;
     int   running = 1;
 
-    attach_shell(shells, &nshells, "player@datacenter",
+    attach_shell(shells, &nshells, "player@datacenter", "",
             CONTAINER_SSH_PORT, l.shell.lines - 2, l.term_cols - 2);
 
     state_load(shells, &nshells, l.shell.lines - 2, l.term_cols - 2, &l.narrator);
@@ -830,6 +841,8 @@ int main(void) {
             shell_read_output(&shells[i], target);
 
             if (!shells[i].alive) {
+                if (shells[i].container_name[0])
+                    container_mgmt_disconnect(shells[i].container_name);
                 PhysServer *dead_srv = infra_find_server(&infra, shells[i].name);
                 if (dead_srv && !dead_srv->has_ipmi) {
                     narrator_printf(&l.narrator,
@@ -1031,8 +1044,11 @@ int main(void) {
     }
 
     /* ── Nettoyage ── */
-    for (int i = 0; i < nshells; i++)
+    for (int i = 0; i < nshells; i++) {
+        if (shells[i].container_name[0])
+            container_mgmt_disconnect(shells[i].container_name);
         shell_close(&shells[i]);
+    }
 
     destroy_layout(&l);
     endwin();

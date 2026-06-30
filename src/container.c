@@ -40,17 +40,43 @@ int container_is_running(const char *name)
     return system(cmd) == 0;
 }
 
-/* Lance un nouveau conteneur avec les capabilities sysadmin standard. */
-static int container_start_new(const char *name, int port, const char *image)
+/* Lance un nouveau conteneur avec les capabilities sysadmin standard.
+ * with_mgmt=1 : rejoint sysadmin-net (conteneur principal uniquement). */
+static int container_start_new(const char *name, int port, const char *image,
+                               int with_mgmt)
 {
     char cmd[CMD_BUF];
-    snprintf(cmd, sizeof(cmd),
-        "podman run -d --name %s"
-        " --network %s --hostname %s"
-        " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
-        " -p 127.0.0.1:%d:22 %s",
-        name, CONTAINER_NETWORK, name, port, image);
+    if (with_mgmt) {
+        snprintf(cmd, sizeof(cmd),
+            "podman run -d --name %s"
+            " --network %s --hostname %s"
+            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
+            " -p 127.0.0.1:%d:22 %s",
+            name, CONTAINER_NETWORK, name, port, image);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+            "podman run -d --name %s"
+            " --hostname %s"
+            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
+            " -p 127.0.0.1:%d:22 %s",
+            name, name, port, image);
+    }
     return run_silent(cmd);
+}
+
+int container_mgmt_connect(const char *name)
+{
+    char cmd[CMD_BUF];
+    snprintf(cmd, sizeof(cmd), "podman network connect %s %s", CONTAINER_NETWORK, name);
+    run_silent(cmd);   /* idempotent : on ignore "déjà connecté" */
+    return 0;
+}
+
+int container_mgmt_disconnect(const char *name)
+{
+    char cmd[CMD_BUF];
+    snprintf(cmd, sizeof(cmd), "podman network disconnect %s %s", CONTAINER_NETWORK, name);
+    return run_silent(cmd) == 0 ? 0 : -1;
 }
 
 static int tcp_probe(int port)
@@ -111,7 +137,7 @@ int container_ensure_running(void)
 
     if (!container_exists(CONTAINER_NAME)) {
         fprintf(stderr, "[container] Création du conteneur %s...\n", CONTAINER_NAME);
-        if (container_start_new(CONTAINER_NAME, CONTAINER_SSH_PORT, CONTAINER_IMAGE) != 0) {
+        if (container_start_new(CONTAINER_NAME, CONTAINER_SSH_PORT, CONTAINER_IMAGE, 1) != 0) {
             fprintf(stderr, "[container] Échec de la création.\n");
             return -1;
         }
@@ -144,7 +170,7 @@ int container_deploy(const char *name, const char *image, int ssh_port,
 
     if (!container_exists(name)) {
         fprintf(stderr, "[container] Déploiement du conteneur %s...\n", name);
-        if (container_start_new(name, ssh_port, image) != 0) {
+        if (container_start_new(name, ssh_port, image, 0) != 0) {
             fprintf(stderr, "[container] Échec du déploiement de %s.\n", name);
             return -1;
         }

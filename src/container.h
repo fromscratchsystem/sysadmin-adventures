@@ -47,4 +47,9 @@ int  container_network_create(const char *name);
 /* Supprime un réseau Podman. Retourne 0 si ok, -1 en cas d'échec. */
 int  container_network_delete(const char *name);
 
+/* Connecte / déconnecte sysadmin-net d'un conteneur serveur.
+ * connect est idempotent (ignore "déjà connecté"). */
+int  container_mgmt_connect   (const char *name);
+int  container_mgmt_disconnect(const char *name);
+
 #endif /* CONTAINER_H */
