@@ -32,7 +32,7 @@ int lang_load(const char *path) {
         if (!eq) continue;
 
         *eq = '\0';
-        strncpy(g_lang[g_nlang].key, line,   255);
+        strncpy(g_lang[g_nlang].key, line, 255);
         strncpy(g_lang[g_nlang].val, eq + 1, 255);
         g_lang[g_nlang].key[255] = '\0';
         g_lang[g_nlang].val[255] = '\0';

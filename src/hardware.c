@@ -19,7 +19,7 @@ ServerModel server_catalog[MAX_SRV_CATALOG];
 int         server_catalog_size = 0;
 
 /* ═══════════════════════════════════════════════════════════════
- * Valeurs par défaut (utilisées si les fichiers sont absents)
+ * Default values (used if files are missing)
  * ═══════════════════════════════════════════════════════════════ */
 
 static const HWComp hw_defaults[] = {
@@ -141,10 +141,10 @@ int hw_prop_int(const HWComp *c, const char *key, int def) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
- * Parsing des fichiers de données
+ * Data file parsing
  * ═══════════════════════════════════════════════════════════════ */
 
-/* Découpe 'line' sur '|', supprime les espaces autour de chaque champ. */
+/* Splits 'line' on '|', trims spaces around each field. */
 static int split_pipe(const char *line, char fields[][64], int max_f) {
     int n = 0;
     const char *p = line;
@@ -288,7 +288,7 @@ int server_catalog_load(const char *path) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
- * Initialisation des slots d'un serveur depuis un modèle
+ * Server slot initialization from model
  * ═══════════════════════════════════════════════════════════════ */
 
 void hw_server_init_slots(PhysServer *srv, const char *model_id) {
@@ -297,7 +297,7 @@ void hw_server_init_slots(PhysServer *srv, const char *model_id) {
     memset(srv->hw_slots, 0, sizeof(srv->hw_slots));
 
     if (!m) {
-        /* Slots par défaut pour un serveur générique */
+        /* Default slots for a generic server */
         static const SlotDef def[] = {{"cpu",1},{"dimm",4},{"sata25",2}};
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < def[i].count && srv->nhw_slots < MAX_HW_SLOTS; j++) {
@@ -314,7 +314,7 @@ void hw_server_init_slots(PhysServer *srv, const char *model_id) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
- * Recalcul des métriques agrégées
+ * Recalculate aggregated metrics
  * ═══════════════════════════════════════════════════════════════ */
 
 void hw_recompute(PhysServer *srv) {
@@ -364,7 +364,7 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
     }
     if (free_slot < 0) return -3;
 
-    /* Vérification compatibilité socket CPU */
+    /* Check CPU socket compatibility */
     if (strcmp(comp->slot_type, "cpu") == 0 && srv->model_id[0]) {
         const ServerModel *m = srv_model_find(srv->model_id);
         if (m && m->cpu_socket[0]) {
@@ -373,7 +373,7 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
         }
     }
 
-    /* Vérification capacité PSU */
+    /* Check PSU capacity */
     if (srv->model_id[0]) {
         const ServerModel *m = srv_model_find(srv->model_id);
         if (m && m->psu_w > 0) {
@@ -390,12 +390,12 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
         }
     }
 
-    /* Vérification compatibilité mémoire */
+    /* Check memory compatibility */
     const HWProp *new_gen_p = hw_prop(comp, "mem_gen");
     const char   *new_gen   = new_gen_p ? new_gen_p->val : "";
 
     if (strcmp(comp->slot_type, "cpu") == 0 && new_gen[0]) {
-        /* Vérifier les DIMMs/SODIMMs déjà installés */
+        /* Check already installed DIMMs/SODIMMs */
         for (int i = 0; i < srv->nhw_slots; i++) {
             if (strcmp(srv->hw_slots[i].type, "dimm")   != 0 &&
                 strcmp(srv->hw_slots[i].type, "sodimm") != 0) continue;
@@ -407,7 +407,7 @@ int hw_install(Infra *inf, const char *server, const char *comp_id) {
         }
     } else if ((strcmp(comp->slot_type, "dimm")   == 0 ||
                 strcmp(comp->slot_type, "sodimm") == 0) && new_gen[0]) {
-        /* Vérifier le CPU installé */
+        /* Check installed CPU */
         for (int i = 0; i < srv->nhw_slots; i++) {
             if (strcmp(srv->hw_slots[i].type, "cpu") != 0) continue;
             if (!srv->hw_slots[i].comp_id[0]) continue;
@@ -496,7 +496,7 @@ void hw_list_server_models(char lines[][128], int *nlines, int max) {
     }
 }
 
-/* ── Affichage métriques d'un serveur ────────────────────────── */
+/* ── Server metrics display ────────────────────────── */
 
 static void star_str(int n, char out[7]) {
     out[0] = '[';

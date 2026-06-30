@@ -3,7 +3,7 @@
 #include <string.h>
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * États du parseur
+ * Parser states
  * ═══════════════════════════════════════════════════════════════════════════ */
 enum {
     ST_NORMAL,
@@ -11,25 +11,25 @@ enum {
     ST_CSI,
     ST_OSC,
     ST_OSC_ESC,
-    ST_ESC_IGNORE   /* consomme un octet après ESC( ESC) etc. */
+    ST_ESC_IGNORE   /* consume one byte after ESC( ESC) etc. */
 };
 
-/* Correspondance couleur ANSI 0-7 → constante ncurses (même ordre) */
+/* ANSI color 0-7 to ncurses constant mapping (same order) */
 static const short ansi_nc[8] = {
     COLOR_BLACK, COLOR_RED,   COLOR_GREEN, COLOR_YELLOW,
     COLOR_BLUE,  COLOR_MAGENTA, COLOR_CYAN, COLOR_WHITE
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Gestion des paires de couleurs — cache global partagé entre tous les VTerms
+ * Color pair management — global cache shared among all VTerms
  *
- * Les paires ncurses sont globales au processus : si chaque VTerm allouait
- * ses propres paires à partir du même indice, ils s'écriraient mutuellement.
- * Un seul cache suffit : une combinaison (fg, bg) donne toujours la même paire.
+ * ncurses pairs are global to the process: if each VTerm allocated
+ * its own pairs from the same index, they would overwrite each other.
+ * One cache is enough: a (fg, bg) combination always yields the same pair.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static short g_pair_cache[VTERM_NCOLORS][VTERM_NCOLORS];
-static int   g_next_pair = -1;   /* -1 = non initialisé */
+static int   g_next_pair = -1;   /* -1 = not initialized */
 
 static void init_global_pairs(int first_pair) {
     if (g_next_pair >= 0) return;
@@ -85,23 +85,23 @@ static void sb_push(VTerm *vt, const VCell *row) {
     if (vt->sb_count < vt->sb_capacity) vt->sb_count++;
 }
 
-/* i=0 = ligne la plus ancienne, i=sb_count-1 = la plus récente */
+/* i=0 = oldest line, i=sb_count-1 = most recent */
 static VCell *sb_row(VTerm *vt, int i) {
     int idx = (vt->sb_head - vt->sb_count + i + vt->sb_capacity) % vt->sb_capacity;
     return vt->scrollback + idx * vt->cols;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Scroll dans la région active
+ * Scroll in active region
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static void scroll_up_n(VTerm *vt, int n) {
     int top = vt->scroll_top, bot = vt->scroll_bottom;
     int h = bot - top + 1;
     if (n <= 0) return;
-    /* Sauvegarde dans le scrollback uniquement pour l'écran principal
-     * et quand la région de scroll commence en haut (top == 0).
-     * On évite ainsi de polluer le scrollback avec vim/less/htop. */
+    /* Save to scrollback only for main screen
+     * and when scroll region starts at top (top == 0).
+     * This avoids polluting scrollback with vim/less/htop. */
     if (n >= h) {
         if (top == 0 && !vt->in_altscreen)
             for (int r = top; r <= bot; r++)
@@ -133,11 +133,11 @@ static void scroll_down_n(VTerm *vt, int n) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Affichage d'un caractère
+ * Character display
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static void put_char(VTerm *vt, unsigned char ch) {
-    /* Résoudre le wrap différé avant d'écrire */
+    /* Resolve deferred wrap before writing */
     if (vt->wrap_pending) {
         vt->ccol = 0;
         vt->crow++;
@@ -234,10 +234,10 @@ static void do_sgr(VTerm *vt) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * CSI — séquences de contrôle
+ * CSI — control sequences
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* P(n, défaut) : param n ou défaut si absent / vaut 0 */
+/* P(n, default): param n or default if missing / is 0 */
 #define P(n, d) (((n) < vt->nparams && vt->params[(n)] > 0) \
                  ? vt->params[(n)] : (d))
 
@@ -245,18 +245,18 @@ static void do_csi(VTerm *vt, char cmd) {
     int n;
 
     if (vt->private_flag) {
-        /* ── Modes DEC privés ── */
+        /* ── Private DEC modes ── */
         for (int i = 0; i < vt->nparams; i++) {
             int mode = vt->params[i];
             if (cmd == 'h') {          /* set */
-                if (mode == 1049) {    /* écran alternatif + sauvegarde curseur */
+                if (mode == 1049) {    /* alternate screen + save cursor */
                     vt->saved_crow = vt->crow;
                     vt->saved_ccol = vt->ccol;
                     vt->in_altscreen = 1;
                     vt->cur = vt->altscreen;
                     vt->crow = 0; vt->ccol = 0;
                     fill_screen(vt);
-                } else if (mode == 47) { /* écran alternatif simple */
+                } else if (mode == 47) { /* simple alternate screen */
                     vt->in_altscreen = 1;
                     vt->cur = vt->altscreen;
                 }
@@ -277,7 +277,7 @@ static void do_csi(VTerm *vt, char cmd) {
     }
 
     switch (cmd) {
-    /* ── Déplacements curseur ── */
+    /* ── Cursor movement ── */
     case 'A': /* CUU */
         vt->crow -= P(0, 1);
         if (vt->crow < 0) vt->crow = 0;
@@ -352,7 +352,7 @@ static void do_csi(VTerm *vt, char cmd) {
         vt->ccol = 0; break;
     }
 
-    /* ── Insertion / suppression de caractères ── */
+    /* ── Character insertion / deletion ── */
     case '@': { /* ICH */
         n = P(0, 1);
         VCell blank = make_blank(vt);
@@ -380,7 +380,7 @@ static void do_csi(VTerm *vt, char cmd) {
     case 'S': scroll_up_n  (vt, P(0, 1)); break; /* SU */
     case 'T': scroll_down_n(vt, P(0, 1)); break; /* SD */
 
-    /* ── Région de scroll ── */
+    /* ── Scroll region ── */
     case 'r': /* DECSTBM */
         vt->scroll_top    = P(0, 1)         - 1;
         vt->scroll_bottom = P(1, vt->rows)  - 1;
@@ -477,7 +477,7 @@ void vterm_process(VTerm *vt, const char *buf, int n) {
                 do_csi(vt, (char)c);
                 vt->state = ST_NORMAL;
             }
-            /* octets intermédiaires 0x20-0x2F : ignorés */
+            /* intermediate bytes 0x20-0x2F: ignored */
             break;
 
         case ST_OSC:
@@ -497,14 +497,14 @@ void vterm_process(VTerm *vt, const char *buf, int n) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Rendu dans une fenêtre ncurses
+ * Rendering in an ncurses window
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 void vterm_render(VTerm *vt, WINDOW *win) {
     for (int r = 0; r < vt->rows; r++) {
         VCell *row;
         if (vt->sb_offset > 0) {
-            /* Vue scrollback : la vue commence sb_offset lignes avant l'écran */
+            /* Scrollback view: view starts sb_offset lines before screen */
             int combined = vt->sb_count - vt->sb_offset + r;
             if (combined < 0) {
                 wmove(win, r, 0);
@@ -526,7 +526,7 @@ void vterm_render(VTerm *vt, WINDOW *win) {
                         | cell->attrs);
         }
     }
-    /* Curseur visible uniquement en vue temps-réel */
+    /* Cursor visible only in real-time view */
     if (vt->sb_offset == 0)
         wmove(win, vt->crow, vt->ccol);
     wrefresh(win);

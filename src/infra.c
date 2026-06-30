@@ -462,9 +462,9 @@ int infra_server_delete(Infra *inf, const char *name) {
     for (int i = 0; i < inf->nservers; i++)
         if (strcmp(inf->servers[i].name, name) == 0) { idx = i; break; }
     if (idx < 0)                    return -1;
-    if (inf->servers[idx].powered)  return -2;   /* doit être éteint */
+    if (inf->servers[idx].powered)  return -2;   /* must be powered off */
 
-    /* Retire tous les câbles partant de ce serveur */
+    /* Remove all cables from this server */
     for (int i = 0; i < inf->ncables; ) {
         if (strcmp(inf->cables[i].server, name) == 0) {
             memmove(&inf->cables[i], &inf->cables[i + 1],
@@ -484,9 +484,9 @@ int infra_switch_delete(Infra *inf, const char *name) {
     for (int i = 0; i < inf->nswitches; i++)
         if (strcmp(inf->switches[i].name, name) == 0) { idx = i; break; }
     if (idx < 0)                     return -1;
-    if (inf->switches[idx].powered)  return -2;   /* doit être éteint */
+    if (inf->switches[idx].powered)  return -2;   /* must be powered off */
 
-    /* Retire tous les câbles vers ce switch */
+    /* Remove all cables to this switch */
     for (int i = 0; i < inf->ncables; ) {
         if (strcmp(inf->cables[i].sw, name) == 0) {
             memmove(&inf->cables[i], &inf->cables[i + 1],

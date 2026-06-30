@@ -4,51 +4,51 @@
 #define CONTAINER_NAME      "sysadmin-game"
 #define CONTAINER_IMAGE     "sysadmin-game:latest"
 #define CONTAINER_NETWORK   "sysadmin-net"
-#define CONTAINER_SSH_PORT  2222   /* port hôte du conteneur principal */
+#define CONTAINER_SSH_PORT  2222   /* host port of main container */
 #define SSH_USER            "player"
 #define SSH_PASSWORD        "datacenter2031"
 
-/* Retourne 1 si le conteneur est en cours d'exécution, 0 sinon. */
+/* Returns 1 if container is running, 0 otherwise. */
 int  container_is_running(const char *name);
 
 /*
- * Crée le réseau Podman partagé si nécessaire.
- * Tous les conteneurs du jeu le rejoignent → DNS inter-conteneurs.
+ * Creates the shared Podman network if necessary.
+ * All game containers join it → inter-container DNS.
  */
 int  container_init_network(void);
 
 /*
- * Vérifie que le conteneur principal est en cours d'exécution.
- * Le construit / crée / démarre si nécessaire.
- * Bloquant (peut prendre ~30s au premier lancement pour le build).
- * Retourne 0 si prêt, -1 en cas d'échec.
+ * Verifies that the main container is running.
+ * Builds / creates / starts it if necessary.
+ * Blocking (may take ~30s on first launch for build).
+ * Returns 0 if ready, -1 on failure.
  */
 int  container_ensure_running(void);
 
 /*
- * Déploie un nouveau conteneur sur le réseau du jeu.
- *   name       : nom Podman + hostname (ex: "web01")
- *   image      : image OCI (ex: "sysadmin-game:latest")
- *   ssh_port   : port hôte exposé pour SSH (127.0.0.1:ssh_port → :22)
- *   extra_nets : réseaux Podman additionnels à connecter (peut être NULL)
- *   nnets      : nombre d'éléments dans extra_nets
+ * Deploys a new container on the game network.
+ *   name       : Podman name + hostname (e.g.: "web01")
+ *   image      : OCI image (e.g.: "sysadmin-game:latest")
+ *   ssh_port   : host port exposed for SSH (127.0.0.1:ssh_port → :22)
+ *   extra_nets : additional Podman networks to connect (may be NULL)
+ *   nnets      : number of elements in extra_nets
  *
- * Le conteneur est persistant. Retourne 0 si prêt, -1 en cas d'échec.
+ * Container is persistent. Returns 0 if ready, -1 on failure.
  */
 int  container_deploy(const char *name, const char *image, int ssh_port,
                       const char **extra_nets, int nnets);
 
-/* Arrête un conteneur sans le supprimer. */
+/* Stops a container without removing it. */
 void container_stop(const char *name);
 
-/* Crée un réseau Podman. Idempotent. Retourne 0 si prêt, -1 en cas d'échec. */
+/* Creates a Podman network. Idempotent. Returns 0 if ready, -1 on failure. */
 int  container_network_create(const char *name);
 
-/* Supprime un réseau Podman. Retourne 0 si ok, -1 en cas d'échec. */
+/* Deletes a Podman network. Returns 0 if ok, -1 on failure. */
 int  container_network_delete(const char *name);
 
-/* Connecte / déconnecte sysadmin-net d'un conteneur serveur.
- * connect est idempotent (ignore "déjà connecté"). */
+/* Connects / disconnects sysadmin-net from a server container.
+ * connect is idempotent (ignores "already connected"). */
 int  container_mgmt_connect   (const char *name);
 int  container_mgmt_disconnect(const char *name);
 

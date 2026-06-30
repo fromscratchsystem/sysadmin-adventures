@@ -3,69 +3,69 @@
 
 #include <stdio.h>
 
-/* ─── Limites ────────────────────────────────────────────────── */
+/* ─── Limits ────────────────────────────────────────────────── */
 #define MAX_RACKS      8
 #define MAX_SERVERS   32
 #define MAX_SWITCHES  16
 #define MAX_CABLES    64
 #define RACK_DEFAULT_U   42
-#define PHYS_SSH_BASE  2300   /* ports 2300-2331 réservés aux serveurs physiques */
+#define PHYS_SSH_BASE  2300   /* ports 2300-2331 reserved for physical servers */
 
-/* ─── Slots hardware génériques ──────────────────────────────── */
+/* ─── Generic hardware slots ──────────────────────────────── */
 #define MAX_HW_SLOTS  32
 
 typedef struct {
     char type[16];      /* "cpu", "dimm", "pcie_x16", "u2", "m2", "sata", ... */
-    char comp_id[32];   /* id du composant installé, "" = vide */
+    char comp_id[32];   /* id of installed component, "" = empty */
 } HWSlot;
 
-/* ─── Baie de brassage ───────────────────────────────────────── */
+/* ─── Rack ───────────────────────────────────────────────– */
 typedef struct {
     char name[32];
     int  units;
 } Rack;
 
-/* ─── Serveur physique ───────────────────────────────────────── */
+/* ─── Physical server ───────────────────────────────────────── */
 typedef struct {
     char name[32];
     char rack[32];
-    int  slot;           /* position dans la baie (base 1) */
-    int  size_u;         /* hauteur en U (1 pour les mini PCs aussi) */
-    int  cpu;            /* cœurs — recalculé depuis hw_slots */
-    int  ram_mb;         /* RAM   — recalculée depuis hw_slots */
-    int  disk_gb;        /* disk  — recalculé depuis hw_slots */
+    int  slot;           /* position in rack (1-indexed) */
+    int  size_u;         /* height in U (1 for mini PCs too) */
+    int  cpu;            /* cores — recalculated from hw_slots */
+    int  ram_mb;         /* RAM   — recalculated from hw_slots */
+    int  disk_gb;        /* disk  — recalculated from hw_slots */
     int  powered;
     int  port;
-    /* Forme et gestion */
-    int  is_minipc;      /* 1 = mini PC (2 par 1U) */
-    int  subslot;        /* 0 ou 1 dans le même U (mini PC seulement) */
-    int  has_ipmi;       /* 0 = pas d'IPMI, intervention physique requise */
-    char model_id[32];   /* id du modèle de châssis, "" si aucun */
-    /* Slots hardware génériques (types et composants installés) */
+    /* Form factor and management */
+    int  is_minipc;      /* 1 = mini PC (2 per 1U) */
+    int  subslot;        /* 0 or 1 in same U (mini PC only) */
+    int  has_ipmi;       /* 0 = no IPMI, physical access required */
+    char model_id[32];   /* id of chassis model, "" if none */
+    /* Generic hardware slots (types and installed components) */
     HWSlot hw_slots[MAX_HW_SLOTS];
     int    nhw_slots;
 } PhysServer;
 
-/* ─── Switch physique ────────────────────────────────────────── */
-/* Chaque switch est backed par un réseau Podman du même nom.    */
+/* ─── Physical switch ────────────────────────────────────────── */
+/* Each switch is backed by a Podman network of the same name.    */
 typedef struct {
     char name[32];
     char rack[32];
     int  slot;
     int  size_u;
-    int  ports;     /* nombre de ports */
+    int  ports;     /* number of ports */
     int  powered;
 } PhysSwitch;
 
-/* ─── Câble entre une NIC de serveur et un port de switch ───── */
+/* ─── Cable connecting server NIC to switch port ───── */
 typedef struct {
     char server[32];
-    char nic[8];    /* ex: "eth0" */
+    char nic[8];    /* e.g.: "eth0" */
     char sw[32];
     int  port;
 } Cable;
 
-/* ─── Infra complète ─────────────────────────────────────────── */
+/* ─── Complete infrastructure ─────────────────────────────────────────── */
 typedef struct {
     Rack       racks   [MAX_RACKS];    int nracks;
     PhysServer servers [MAX_SERVERS];  int nservers;
@@ -73,67 +73,67 @@ typedef struct {
     Cable      cables  [MAX_CABLES];   int ncables;
 } Infra;
 
-/* ── Recherche ────────────────────────────────────────────────── */
+/* ── Search ────────────────────────────────────────────────── */
 Rack       *infra_find_rack  (Infra *inf, const char *name);
 PhysServer *infra_find_server(Infra *inf, const char *name);
 PhysSwitch *infra_find_switch(Infra *inf, const char *name);
 
 /* ── Construction ─────────────────────────────────────────────── */
 /*
- * Retourne  0 : succès
- *          -1 : limite atteinte
- *          -2 : référence inconnue (baie, etc.)
- *          -3 : nom déjà utilisé
- *          -4 : slot invalide (< 1)
- *          -5 : slot occupé
+ * Returns  0: success
+ *         -1: limit reached
+ *         -2: unknown reference (rack, etc.)
+ *         -3: name already in use
+ *         -4: invalid slot (< 1)
+ *         -5: slot occupied
  */
 int infra_rack_create  (Infra *inf, const char *name, int units);
 int infra_server_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int cpu, int ram_mb, int disk_gb);
 /*
- * Ajout avec modèle de châssis (size_u, has_ipmi issus du modèle).
- * Les slots hardware sont configurés séparément par hw_server_init_slots().
- * Retourne les mêmes codes qu'infra_server_add.
+ * Add with chassis model (size_u, has_ipmi from model).
+ * Hardware slots are configured separately by hw_server_init_slots().
+ * Returns same codes as infra_server_add.
  */
 int infra_server_add_model(Infra *inf, const char *name, const char *rack,
                            int slot, int size_u, int has_ipmi,
                            const char *model_id);
 /*
- * Ajout d'un mini PC (2 par 1U, subslot auto-assigné).
- * Retourne les mêmes codes qu'infra_server_add.
+ * Add a mini PC (2 per 1U, subslot auto-assigned).
+ * Returns same codes as infra_server_add.
  */
 int infra_minipc_add   (Infra *inf, const char *name, const char *rack,
                         int slot, const char *model_id);
 int infra_switch_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int ports);
 /*
- * Retourne  0 : succès
- *          -1 : limite de câbles atteinte
- *          -2 : serveur ou switch inconnu
- *          -3 : cette NIC est déjà câblée
- *          -4 : port hors plage (< 1 ou > switch.ports)
- *          -5 : ce port du switch est déjà occupé
+ * Returns  0: success
+ *         -1: cable limit reached
+ *         -2: unknown server or switch
+ *         -3: this NIC is already cabled
+ *         -4: port out of range (< 1 or > switch.ports)
+ *         -5: this switch port is already occupied
  */
 int infra_cable_connect(Infra *inf, const char *server, const char *nic,
                         const char *sw, int port);
 
-/* ── Suppression ──────────────────────────────────────────────── */
+/* ── Deletion ──────────────────────────────────────────────── */
 /*
- * Retourne  0 : succès
- *          -1 : introuvable
- *          -2 : dépendances (baie non vide, serveur/switch allumé)
+ * Returns  0: success
+ *         -1: not found
+ *         -2: dependencies (non-empty rack, powered server/switch)
  */
 int infra_rack_delete     (Infra *inf, const char *name);
 int infra_server_delete   (Infra *inf, const char *name);
 int infra_switch_delete   (Infra *inf, const char *name);
 int infra_cable_disconnect(Infra *inf, const char *server, const char *nic);
 
-/* ── Requêtes ─────────────────────────────────────────────────── */
-/* Retourne les noms de réseaux Podman associés à un serveur via ses câbles. */
+/* ── Queries ─────────────────────────────────────────────────── */
+/* Returns names of Podman networks associated with a server via its cables. */
 int infra_server_nets(const Infra *inf, const char *server,
                       const char *nets_out[], int max_nets);
 
-/* ── Rendu texte (sans dépendance ncurses) ────────────────────── */
+/* ── Text rendering (no ncurses dependency) ────────────────────── */
 void infra_rack_render   (const Infra *inf, const char *rack_name,
                           char lines[][128], int *nlines, int max_lines);
 void infra_server_show   (const Infra *inf, const char *name,
@@ -149,7 +149,7 @@ void infra_list_switches (const Infra *inf, const char *rack,
 void infra_list_cables   (const Infra *inf,
                           char lines[][128], int *nlines, int max_lines);
 
-/* ── Persistance ──────────────────────────────────────────────── */
+/* ── Persistence ──────────────────────────────────────────────── */
 void infra_save(const Infra *inf, const char *path);
 void infra_load(Infra *inf, const char *path);
 

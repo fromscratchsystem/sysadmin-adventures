@@ -1,7 +1,7 @@
 #include "history.h"
 
 void history_push(History *h, const char *cmd) {
-    /* Ignore les doublons consécutifs */
+    /* Ignore consecutive duplicates */
     if (h->count > 0 &&
         strcmp(h->entries[(h->count - 1) % HISTORY_MAX], cmd) == 0)
         return;
@@ -13,7 +13,7 @@ void history_push(History *h, const char *cmd) {
 }
 
 int history_prev(History *h, char *buf, int maxlen, char *saved) {
-    /* Sauvegarde la saisie courante avant la première remontée */
+    /* Save current input before first scroll up */
     if (h->cursor == h->count)
         strncpy(saved, buf, CMD_MAX - 1);
 

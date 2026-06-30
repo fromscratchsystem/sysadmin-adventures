@@ -11,11 +11,11 @@
 /* ═══════════════════════════════════════════════════════════════
  * shell_spawn
  *
- * Ouvre une connexion SSH vers le conteneur Podman :
+ * Opens SSH connection to Podman container:
  *  1. TCP connect → 127.0.0.1:CONTAINER_SSH_PORT
- *  2. libssh2 handshake + auth par mot de passe
- *  3. Ouverture d'un canal SSH avec PTY (xterm-256color)
- *  4. Passage en mode non-bloquant pour intégration select()
+ *  2. libssh2 handshake + password auth
+ *  3. Open SSH channel with PTY (xterm-256color)
+ *  4. Switch to non-blocking mode for select() integration
  * ═══════════════════════════════════════════════════════════════ */
 Shell shell_spawn(int shell_rows, int shell_cols,
                   const char *name, int port)
@@ -139,7 +139,7 @@ void shell_send_line(Shell *sh, const char *cmd)
         }
     }
 
-    /* newline */
+    /* send newline */
     while (libssh2_channel_write(ch, "\n", 1) == LIBSSH2_ERROR_EAGAIN)
         usleep(1000);
 }
@@ -147,8 +147,8 @@ void shell_send_line(Shell *sh, const char *cmd)
 /* ═══════════════════════════════════════════════════════════════
  * shell_read_output
  *
- * Lit les données disponibles sur le canal SSH, les passe au VTerm,
- * puis rend l'écran dans win.
+ * Reads available data from SSH channel, passes to VTerm,
+ * then renders screen in win.
  * ═══════════════════════════════════════════════════════════════ */
 void shell_read_output(Shell *sh, WINDOW *win)
 {
@@ -165,14 +165,14 @@ void shell_read_output(Shell *sh, WINDOW *win)
         } else if (n == LIBSSH2_ERROR_EAGAIN) {
             break;
         } else {
-            /* n == 0 (EOF) ou erreur */
+            /* n == 0 (EOF) or error */
             sh->alive = 0;
             break;
         }
     }
 
     if (!sh->alive && libssh2_channel_eof(ch) == 0)
-        sh->alive = 1;   /* faux positif : canal encore ouvert */
+        sh->alive = 1;   /* false positive: channel still open */
 
     if (libssh2_channel_eof(ch))
         sh->alive = 0;
@@ -190,7 +190,7 @@ void shell_resize(Shell *sh, int rows, int cols)
 
     LIBSSH2_CHANNEL *ch = (LIBSSH2_CHANNEL *)sh->ssh_channel;
 
-    /* libssh2 peut retourner EAGAIN en mode non-bloquant */
+    /* libssh2 may return EAGAIN in non-blocking mode */
     int rc;
     do {
         rc = libssh2_channel_request_pty_size(ch, cols, rows);

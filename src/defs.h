@@ -11,20 +11,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-/* ─── Dimensions layout ──────────────────────────────────────── */
+/* ─── Layout dimensions ──────────────────────────────────────── */
 #define STATUS_HEIGHT   1
 #define NARRATOR_RATIO  0.35
 #define INPUT_HEIGHT    1
 
-/* ─── Historique ─────────────────────────────────────────────── */
+/* ─── History ─────────────────────────────────────────────── */
 #define HISTORY_MAX     64
 #define CMD_MAX         256
 
-/* ─── Multi-conteneurs ───────────────────────────────────────── */
-#define MAX_SHELLS     16   /* conteneur principal + serveurs infra + deploys */
-#define MAX_NETS        8   /* réseaux additionnels par conteneur */
+/* ─── Multi-container ───────────────────────────────────────── */
+#define MAX_SHELLS     16   /* main container + infra servers + deploys */
+#define MAX_NETS        8   /* additional networks per container */
 
-/* ─── Paires de couleurs ncurses ─────────────────────────────── */
+/* ─── ncurses color pairs ─────────────────────────────────── */
 #define COL_NARRATOR_BORDER 1
 #define COL_NARRATOR_TEXT   2
 #define COL_SHELL_BORDER    3
@@ -33,7 +33,7 @@
 #define COL_PROMPT          6
 #define COL_INPUT           7
 
-/* ─── Panel : une zone ncurses avec bordure + contenu ────────── */
+/* ─── Panel: ncurses area with border + content ────────── */
 typedef struct {
     WINDOW     *border;
     WINDOW     *inner;
@@ -42,10 +42,10 @@ typedef struct {
     const char *title;
 } Panel;
 
-/* ─── Layout : l'ensemble des fenêtres ───────────────────────── */
+/* ─── Layout: complete set of windows ───────────────────────── */
 typedef struct {
     Panel   narrator;
-    WINDOW *tab_bar;   /* barre d'onglets entre narrateur et shell */
+    WINDOW *tab_bar;   /* tab bar between narrator and shell */
     Panel   shell;
     WINDOW *status;
     WINDOW *input_win;
@@ -53,26 +53,26 @@ typedef struct {
     int     term_cols;
 } Layout;
 
-/* ─── Historique des commandes ───────────────────────────────── */
+/* ─── Command history ───────────────────────────────────── */
 typedef struct {
     char entries[HISTORY_MAX][CMD_MAX];
     int  count;
     int  cursor;
 } History;
 
-/* ─── Shell : connexion SSH vers un conteneur Podman ─────────── */
+/* ─── Shell: SSH connection to Podman container ─────────── */
 typedef struct {
-    int            sock;          /* socket TCP pour select()        */
+    int            sock;          /* TCP socket for select()        */
     int            alive;
-    int            has_activity;  /* données reçues hors focus       */
-    int            port;          /* port hôte SSH (pour persistance) */
-    char           name[32];           /* label de l'onglet               */
-    char           container_name[32]; /* nom Podman réel ("" = principal) */
-    char           extra_nets[MAX_NETS][32]; /* réseaux additionnels */
+    int            has_activity;  /* received data while unfocused  */
+    int            port;          /* SSH host port (for persistence) */
+    char           name[32];           /* tab label               */
+    char           container_name[32]; /* real Podman name ("" = main) */
+    char           extra_nets[MAX_NETS][32]; /* additional networks */
     int            nnets;
-    struct VTerm  *vterm;         /* émulateur VT100                 */
-    void          *ssh_session;   /* LIBSSH2_SESSION*, opaque ici    */
-    void          *ssh_channel;   /* LIBSSH2_CHANNEL*, opaque ici    */
+    struct VTerm  *vterm;         /* VT100 emulator                 */
+    void          *ssh_session;   /* LIBSSH2_SESSION*, opaque here  */
+    void          *ssh_channel;   /* LIBSSH2_CHANNEL*, opaque here  */
 } Shell;
 
 #endif /* DEFS_H */

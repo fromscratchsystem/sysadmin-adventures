@@ -4,25 +4,25 @@
 #include "defs.h"
 
 /*
- * history_push — ajoute une commande à l'historique.
- * Les doublons consécutifs sont ignorés (comportement bash par défaut).
- * Le curseur est remis en fin d'historique après chaque ajout.
+ * history_push — adds a command to history.
+ * Consecutive duplicates are ignored (default bash behavior).
+ * Cursor is reset to end of history after each addition.
  */
 void history_push(History *h, const char *cmd);
 
 /*
- * history_prev — recule dans l'historique (touche ↑).
- * Copie la commande dans buf (taille maxlen).
- * Retourne 1 si une entrée a été chargée, 0 si déjà au plus ancien.
+ * history_prev — goes back in history (up arrow key).
+ * Copies command into buf (size maxlen).
+ * Returns 1 if an entry was loaded, 0 if already at oldest.
  *
- * saved : buffer où sauvegarder la saisie courante avant la première
- *         remontée (restauré par history_next quand on revient à la fin).
+ * saved: buffer to save current input before first
+ *        scroll up (restored by history_next when returning to end).
  */
 int history_prev(History *h, char *buf, int maxlen, char *saved);
 
 /*
- * history_next — avance dans l'historique (touche ↓).
- * Retourne 1 si une entrée a été chargée, 0 si déjà en fin.
+ * history_next — goes forward in history (down arrow key).
+ * Returns 1 if an entry was loaded, 0 if already at end.
  */
 int history_next(History *h, char *buf, int maxlen, const char *saved);
 

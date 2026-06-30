@@ -13,7 +13,7 @@
 #include <sys/select.h>
 
 /* ═══════════════════════════════════════════════════════════════
- * SIGNAUX
+ * SIGNALS
  * ═══════════════════════════════════════════════════════════════ */
 
 static volatile sig_atomic_t g_resize_pending = 0;
@@ -21,10 +21,10 @@ static volatile sig_atomic_t g_resize_pending = 0;
 static void handle_sigwinch(int sig) { (void)sig; g_resize_pending = 1; }
 
 /* ═══════════════════════════════════════════════════════════════
- * NARRATEUR — réactions aux commandes shell
+ * NARRATOR — reactions to shell commands
  * ═══════════════════════════════════════════════════════════════ */
 
-/* Retourne 1 si la commande est bloquée (ne pas l'envoyer au shell). */
+/* Returns 1 if command is blocked (don't send to shell). */
 static int narrator_react(Panel *narrator, const char *cmd) {
     if (strncmp(cmd, "rm ", 3) == 0) {
         const char *sp = strstr(cmd, " /");
@@ -57,7 +57,7 @@ static int narrator_react(Panel *narrator, const char *cmd) {
  * UTILITAIRES MULTI-SHELL
  * ═══════════════════════════════════════════════════════════════ */
 
-/* Contexte partagé entre les handlers de commandes jeu. */
+/* Shared context among game command handlers. */
 typedef struct {
     Shell  *shells;
     int    *nshells;
@@ -83,7 +83,7 @@ static void shells_compact(Shell *shells, int *nshells, int *active) {
 
 /*
  * Ouvre un shell SSH vers un conteneur déjà en cours d'exécution.
- * cname : nom Podman réel pour gérer sysadmin-net ("" = conteneur principal).
+ * cname: actual Podman name to manage sysadmin-net ("" = main container).
  * Retourne le nouvel index ou -1 si MAX_SHELLS atteint.
  */
 static int attach_shell(Shell *shells, int *nshells,
@@ -141,7 +141,7 @@ static const char *state_path(void) {
     return path;
 }
 
-/* Affiche un buffer de lignes dans le panel narrateur. */
+/* Displays a buffer of lines in the narrator panel. */
 static void narrate(Panel *p, char lines[][128], int n) {
     for (int i = 0; i < n; i++) narrator_say(p, lines[i]);
 }
@@ -149,7 +149,7 @@ static void narrate(Panel *p, char lines[][128], int n) {
 static void state_save(Shell *shells, int nshells) {
     FILE *f = fopen(state_path(), "w");
     if (!f) return;
-    for (int i = 1; i < nshells; i++) {   /* 0 = conteneur principal, toujours recréé */
+    for (int i = 1; i < nshells; i++) {   /* 0 = main container, always recreated */
         if (!shells[i].alive) continue;
         fprintf(f, "C:%s:%d:", shells[i].name, shells[i].port);
         for (int j = 0; j < shells[i].nnets; j++) {
@@ -388,7 +388,7 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
 
         int rc;
         if (!model_arg[0]) {
-            /* Pas de modèle : serveur générique 1U avec IPMI */
+            /* No model: generic 1U server with IPMI */
             rc = infra_server_add(inf, sname, srack, slot, 1, 1, 2048, 100);
         } else {
             const ServerModel *m = srv_model_find(model_arg);
@@ -732,7 +732,7 @@ static void cmd_hardware(const char *sub, Infra *inf, Panel *nar,
  * ═══════════════════════════════════════════════════════════════ */
 
 int main(void) {
-    /* Tout ce qui appelle system() doit s'exécuter AVANT initscr() */
+    /* Everything calling system() must execute BEFORE initscr() */
 
     if (container_init_network() != 0) {
         fprintf(stderr, "Impossible de créer le réseau Podman. Abandon.\n");
@@ -743,7 +743,7 @@ int main(void) {
         return 1;
     }
 
-    /* Langue — détectée depuis LANG, chargée si différente du français */
+    /* Language — detected from LANG, loaded if different from French */
     {
         const char *lc = lang_detect();
         if (lc[0] != 'f' || lc[1] != 'r') {
@@ -753,14 +753,14 @@ int main(void) {
         }
     }
 
-    /* Catalogues hardware — chargés depuis les fichiers de données */
+    /* Hardware catalogs — loaded from data files */
     hw_catalog_load("data/hw_components.txt");
     server_catalog_load("data/server_models.txt");
 
-    /* Infra physique — recrée les réseaux Podman des switches (idempotent) */
+    /* Physical infra — recreates Podman networks for switches (idempotent) */
     Infra infra;
     infra_load(&infra, infra_path());
-    /* Serveurs chargés depuis un fichier ancien (sans HW:) : init leurs slots */
+    /* Servers loaded from old file (no HW:): initialize their slots */
     for (int i = 0; i < infra.nservers; i++) {
         PhysServer *s = &infra.servers[i];
         if (s->nhw_slots == 0 && s->model_id[0])
@@ -770,7 +770,7 @@ int main(void) {
     for (int i = 0; i < infra.nswitches; i++)
         container_network_create(infra.switches[i].name);
 
-    /* Signaux — enregistrés avant initscr() */
+    /* Signals — registered before initscr() */
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_sigwinch;
@@ -807,7 +807,7 @@ int main(void) {
     narrator_say(&l.narrator, T("Tu geres un datacenter. Essaie de ne pas tout faire planter."));
     narrator_say(&l.narrator, T("Commence par taper 'ls'. Si t'es capable."));
 
-    /* Buffer de saisie */
+    /* Input buffer */
     char input_buf[CMD_MAX] = "";
     char saved_buf[CMD_MAX] = "";
     int  input_pos = 0;
@@ -817,7 +817,7 @@ int main(void) {
      * ═══════════════════════════════════════════════════════════ */
     while (running) {
 
-        /* ── Signaux en attente ── */
+        /* ── Pending signals ── */
         if (g_resize_pending) {
             g_resize_pending = 0;
             l = handle_resize(&l, shells, nshells);
@@ -830,7 +830,7 @@ int main(void) {
             continue;
         }
 
-        /* ── select() : surveille stdin + tous les sockets SSH actifs ── */
+        /* ── select(): monitors stdin + all active SSH sockets ── */
         fd_set rfds;
         FD_ZERO(&rfds);
         FD_SET(STDIN_FILENO, &rfds);
@@ -851,7 +851,7 @@ int main(void) {
             break;
         }
 
-        /* ── Sortie SSH (tous les shells) ── */
+        /* ── SSH output (all shells) ── */
         int need_tab_refresh = 0;
         for (int i = 0; i < nshells; i++) {
             if (!shells[i].alive) continue;
@@ -900,7 +900,7 @@ int main(void) {
             wrefresh(l.input_win);
         }
 
-        /* ── Clavier ── */
+        /* ── Keyboard ── */
         if (!FD_ISSET(STDIN_FILENO, &rfds)) continue;
 
         wtimeout(l.input_win, 0);
@@ -908,7 +908,7 @@ int main(void) {
         wtimeout(l.input_win, -1);
         if (ch == ERR) continue;
 
-        /* ── Touches de navigation entre onglets (F1-F8) ── */
+        /* ── Tab navigation keys (F1-F8) ── */
         if (ch >= KEY_F(1) && ch <= KEY_F(MAX_SHELLS)) {
             int target = ch - KEY_F(1);
             if (target < nshells && shells[target].alive && target != active) {
@@ -921,7 +921,7 @@ int main(void) {
             continue;
         }
 
-        /* ── Scroll narrateur Shift+PageUp / Shift+PageDown ── */
+        /* ── Narrator scroll Shift+PageUp / Shift+PageDown ── */
         if (ch == KEY_SPREVIOUS || ch == KEY_SNEXT) {
             int half = (l.narrator.lines - 2) / 2;
             narrator_scroll(&l.narrator, ch == KEY_SPREVIOUS ? half : -half);
@@ -940,7 +940,7 @@ int main(void) {
             continue;
         }
 
-        /* Toute autre touche ramène à la vue temps-réel */
+        /* Any other key returns to real-time view */
         if (shells[active].alive && shells[active].vterm
                 && shells[active].vterm->sb_offset != 0) {
             shells[active].vterm->sb_offset = 0;
@@ -1062,7 +1062,7 @@ int main(void) {
         }
     }
 
-    /* ── Nettoyage ── */
+    /* ── Cleanup ── */
     for (int i = 0; i < nshells; i++) {
         if (shells[i].container_name[0])
             container_mgmt_disconnect(shells[i].container_name);

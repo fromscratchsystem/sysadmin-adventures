@@ -5,23 +5,23 @@
 #include <string.h>
 
 /* ═══════════════════════════════════════════════════════════════
- * Buffer d'historique du narrateur — global pour survivre aux resize
+ * Narrator history buffer — global to survive resize
  * ═══════════════════════════════════════════════════════════════ */
 
 #define NARRATOR_HIST 512
 #define NARRATOR_LINE 256
 
 static char g_nb_lines[NARRATOR_HIST][NARRATOR_LINE];
-static int  g_nb_count  = 0;   /* lignes stockées */
-static int  g_nb_head   = 0;   /* prochain emplacement d'écriture */
-static int  g_nb_offset = 0;   /* 0=live, N=remonté de N lignes */
+static int  g_nb_count  = 0;   /* lines stored */
+static int  g_nb_head   = 0;   /* next write location */
+static int  g_nb_offset = 0;   /* 0=live, N=scrolled up N lines */
 
 static void narrator_render(Panel *p) {
     int height = p->lines - 2;
     werase(p->inner);
     wattron(p->inner, COLOR_PAIR(COL_NARRATOR_TEXT));
 
-    /* Dernière ligne à afficher (la plus récente dans la vue) */
+    /* Last line to display (most recent in view) */
     int last  = g_nb_count - 1 - g_nb_offset;
     int first = last - height + 1;
     if (first < 0) first = 0;
@@ -127,7 +127,7 @@ Layout create_layout(void) {
 
     l.shell = make_panel(shell_h, l.term_cols, shell_y, 0,
                          COL_SHELL_BORDER, "TERMINAL");
-    /* Le VTerm gère son propre rendu : ncurses ne doit pas scroller */
+    /* VTerm manages its own rendering: ncurses must not scroll */
     scrollok(l.shell.inner, FALSE);
 
     l.input_win = newwin(INPUT_HEIGHT, l.term_cols, input_y, 0);
@@ -258,7 +258,7 @@ void shell_print(Panel *p, const char *line) {
 
 /* ═══════════════════════════════════════════════════════════════
  * BARRE D'ONGLETS
- * Format : [F1 name] [F2 name*] …   (* = activité hors focus)
+ * Format: [F1 name] [F2 name*] …   (* = activity while unfocused)
  * ═══════════════════════════════════════════════════════════════ */
 void draw_tabs(WINDOW *tab_bar, Shell *shells, int nshells,
                int active, int cols)

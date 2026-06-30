@@ -1,6 +1,6 @@
 # Contributing
 
-## Prérequis
+## Prerequisites
 
 - GCC (C99)
 - libncurses-dev
@@ -8,82 +8,82 @@
 - Podman
 
 ```sh
-make        # compile le jeu → ./game
-make test   # lance les suites de tests
-make re     # recompilation complète
+make        # compile game → ./game
+make test   # run test suites
+make re     # full recompilation
 ```
 
 ## Architecture
 
-| Fichier | Rôle |
+| File | Role |
 |---|---|
-| `src/infra.c/h` | Modèle physique : racks, serveurs, switches, câbles |
-| `src/hardware.c/h` | Catalogue composants (CPU/RAM/Disk) et modèles de châssis |
-| `src/container.c/h` | Gestion des conteneurs Podman (serveurs simulés) |
-| `src/vterm.c/h` | Émulateur de terminal (VT100/ANSI) |
-| `src/ui.c/h` | Rendu ncurses : panneaux, tabs, narrator |
-| `src/main.c` | Boucle de jeu, dispatch des commandes `/` |
-| `data/` | Catalogues éditables sans recompilation |
-| `tests/` | Suites de tests unitaires |
+| `src/infra.c/h` | Physical model: racks, servers, switches, cables |
+| `src/hardware.c/h` | Component catalog (CPU/RAM/Disk) and chassis models |
+| `src/container.c/h` | Podman container management (simulated servers) |
+| `src/vterm.c/h` | Terminal emulator (VT100/ANSI) |
+| `src/ui.c/h` | ncurses rendering: panels, tabs, narrator |
+| `src/main.c` | Game loop, `/` command dispatch |
+| `data/` | Editable catalogs (no recompilation needed) |
+| `tests/` | Unit test suites |
 
-**Règle d'isolation :** `infra.c` ne doit pas inclure `hardware.h`. Les binaires de test (`test_infra`) ne linkent que leur module cible — éviter les dépendances croisées qui brisent cette isolation.
+**Isolation Rule:** `infra.c` must not include `hardware.h`. Test binaries (`test_infra`) link only their target module — avoid cross-dependencies that break this isolation.
 
-## Données
+## Data
 
-Les catalogues hardware se trouvent dans `data/` au format pipe-séparé :
+Hardware catalogs are in `data/` in pipe-delimited format:
 
 ```
-# Commentaire
+# Comment
 type | id | label | cores | ghz10 | mem_gen | size_mb | size_gb | disk_type | iops
 ```
 
-Pour ajouter un composant ou un modèle de serveur : éditer le fichier texte, relancer le jeu. Pas de recompilation.
+To add a component or server model: edit the text file, restart the game. No recompilation.
 
-## Règles de contribution
+## Contribution Rules
 
-### 1. Tests d'abord
+### 1. Tests First
 
-Toute correction de bug ou nouvelle validation doit être couverte par un test **avant** le commit.
+Any bug fix or new validation must be covered by a test **before** commit.
 
 ```sh
-# Ajouter le test dans tests/test_infra.c (ou test_vterm.c, test_history.c)
-make test   # doit passer
+# Add test to tests/test_infra.c (or test_vterm.c, test_history.c)
+make test   # must pass
 git add ... && git commit
 ```
 
-Le test doit couvrir le cas nominal, la limite basse, la limite haute et les valeurs invalides quand c'est pertinent.
+Test must cover: nominal case, lower bound, upper bound, invalid values when applicable.
 
-### 2. Tests unitaires
+### 2. Unit Tests
 
-Les tests utilisent `tests/framework.h` (pas de dépendance externe) :
+Tests use `tests/framework.h` (no external dependencies):
 
 ```c
-TEST(mon_test) {
+TEST(my_test) {
     Infra inf = {0};
     infra_rack_create(&inf, "rack-A", 42);
-    ASSERT_EQ(infra_rack_create(&inf, "rack-A", 10), -3); /* doublon */
+    ASSERT_EQ(infra_rack_create(&inf, "rack-A", 10), -3); /* duplicate */
 }
 ```
 
-Ajouter l'appel dans le `main()` du fichier de test correspondant. `make test` doit afficher `✓  Toutes les suites passées`.
+Add call to test's `main()`. `make test` should display `✓  All suites passed`.
 
-### 3. Codes de retour
+### 3. Return Codes
 
-Les fonctions `infra_*` et `hw_*` retournent `0` pour le succès et des entiers négatifs pour les erreurs. Chaque code doit être documenté dans le `.h` correspondant. Ajouter un nouveau code si la situation d'erreur est distincte — ne pas réutiliser un code existant pour un cas différent.
+`infra_*` and `hw_*` functions return `0` for success and negative integers for errors. Each code must be documented in the corresponding `.h` file. Add a new code if the error situation is distinct — don't reuse an existing code for a different case.
 
-### 4. Style C
+### 4. C Style
 
-- Standard : C99, `-Wall -Wextra -pedantic`, zéro warning.
-- Nommage : `snake_case` pour tout (fonctions, variables, types via `typedef`).
-- Pas de commentaires sauf quand le **pourquoi** est non-évident (contrainte cachée, contournement de bug). Ne pas commenter le *quoi*.
-- Pas de `malloc` / `free` : toutes les structures utilisent des tableaux statiques de taille fixe définis par des constantes dans les `.h` (`MAX_RACKS`, `HW_RAM_SLOTS`, etc.).
-- Les chaînes de l'interface utilisateur sont en français.
+- Standard: C99, `-Wall -Wextra -pedantic`, zero warnings.
+- Naming: `snake_case` for everything (functions, variables, types via `typedef`).
+- No comments except when the **why** is non-obvious (hidden constraint, workaround, surprise). Don't comment the **what**.
+- No `malloc` / `free`: all structures use fixed-size static arrays defined by constants in `.h` files (`MAX_RACKS`, `HW_RAM_SLOTS`, etc.).
+- UI strings are in English.
 
-### 5. Messages de commit
+### 5. Commit Messages
 
-Format : `type: description courte` (Conventional Commits, en anglais).
+Format: `type: short description` (Conventional Commits, in English).
 
-Types : `feat` / `fix` / `test` / `refactor` / `docs` / `chore`.
+Types: `feat` / `fix` / `test` / `refactor` / `docs` / `chore`.
 
 ```
 feat: add power management for switches
@@ -91,12 +91,12 @@ fix: reject negative slot numbers in server_add
 test: cover cable port boundary conditions
 ```
 
-Un commit = une intention. Ne pas mélanger refactoring et nouvelle fonctionnalité dans le même commit.
+One commit = one intention. Don't mix refactoring and new features in same commit.
 
-### 6. Persistance
+### 6. Persistence
 
-Les objets infra sont sauvegardés dans `~/.sysadmin-game.infra` via `infra_save/load`. Si un champ est ajouté à une structure persistée :
+Infrastructure objects are saved to `~/.sysadmin-game.infra` via `infra_save/load`. If a field is added to a persisted structure:
 
-1. Étendre le format dans `infra_save()`.
-2. Garder la compatibilité ascendante dans `infra_load()` en vérifiant le nombre de champs lus par `sscanf`.
-3. Ajouter un test de round-trip dans `test_infra.c`.
+1. Extend format in `infra_save()`.
+2. Keep backward compatibility in `infra_load()` by checking fields read by `sscanf`.
+3. Add round-trip test to `test_infra.c`.

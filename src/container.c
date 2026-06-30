@@ -40,8 +40,8 @@ int container_is_running(const char *name)
     return system(cmd) == 0;
 }
 
-/* Lance un nouveau conteneur avec les capabilities sysadmin standard.
- * with_mgmt=1 : rejoint sysadmin-net (conteneur principal uniquement). */
+/* Starts a new container with standard sysadmin capabilities.
+ * with_mgmt=1: joins sysadmin-net (main container only). */
 static int container_start_new(const char *name, int port, const char *image,
                                int with_mgmt)
 {
@@ -68,7 +68,7 @@ int container_mgmt_connect(const char *name)
 {
     char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman network connect %s %s", CONTAINER_NETWORK, name);
-    run_silent(cmd);   /* idempotent : on ignore "déjà connecté" */
+    run_silent(cmd);   /* idempotent: ignores "already connected" */
     return 0;
 }
 
@@ -103,84 +103,84 @@ static int wait_for_ssh(int port, int max_s)
     return -1;
 }
 
-/* ── Réseau partagé ── */
+/* ── Shared network ── */
 
 int container_init_network(void)
 {
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "podman network exists %s", CONTAINER_NETWORK);
-    if (run_silent(cmd) == 0) return 0;   /* déjà présent */
+    if (run_silent(cmd) == 0) return 0;   /* already present */
 
-    fprintf(stderr, "[container] Création du réseau %s...\n", CONTAINER_NETWORK);
+    fprintf(stderr, "[container] Creating network %s...\n", CONTAINER_NETWORK);
     snprintf(cmd, sizeof(cmd), "podman network create %s", CONTAINER_NETWORK);
     if (run_silent(cmd) != 0) {
-        fprintf(stderr, "[container] Échec de la création du réseau.\n");
+        fprintf(stderr, "[container] Failed to create network.\n");
         return -1;
     }
     return 0;
 }
 
-/* ── Conteneur principal (joueur) ── */
+/* ── Main container (player) ── */
 
 int container_ensure_running(void)
 {
     if (!image_exists(CONTAINER_IMAGE)) {
-        fprintf(stderr, "[container] Construction de l'image %s (première fois, ~30s)...\n",
+        fprintf(stderr, "[container] Building image %s (first time, ~30s)...\n",
                 CONTAINER_IMAGE);
         char cmd[512];
         snprintf(cmd, sizeof(cmd), "podman build -t %s .", CONTAINER_IMAGE);
         if (system(cmd) != 0) {
-            fprintf(stderr, "[container] Échec du build.\n");
+            fprintf(stderr, "[container] Build failed.\n");
             return -1;
         }
     }
 
     if (!container_exists(CONTAINER_NAME)) {
-        fprintf(stderr, "[container] Création du conteneur %s...\n", CONTAINER_NAME);
+        fprintf(stderr, "[container] Creating container %s...\n", CONTAINER_NAME);
         if (container_start_new(CONTAINER_NAME, CONTAINER_SSH_PORT, CONTAINER_IMAGE, 1) != 0) {
-            fprintf(stderr, "[container] Échec de la création.\n");
+            fprintf(stderr, "[container] Creation failed.\n");
             return -1;
         }
     } else if (!container_is_running(CONTAINER_NAME)) {
-        fprintf(stderr, "[container] Démarrage du conteneur %s...\n", CONTAINER_NAME);
+        fprintf(stderr, "[container] Starting container %s...\n", CONTAINER_NAME);
         char cmd[CMD_BUF];
         snprintf(cmd, sizeof(cmd), "podman start %s", CONTAINER_NAME);
         if (run_silent(cmd) != 0) {
-            fprintf(stderr, "[container] Échec du démarrage.\n");
+            fprintf(stderr, "[container] Failed to start.\n");
             return -1;
         }
     }
 
     if (wait_for_ssh(CONTAINER_SSH_PORT, SSH_WAIT_S) < 0) {
-        fprintf(stderr, "[container] SSH non disponible après %ds.\n", SSH_WAIT_S);
+        fprintf(stderr, "[container] SSH unavailable after %ds.\n", SSH_WAIT_S);
         return -1;
     }
     return 0;
 }
 
-/* ── Conteneurs additionnels (scénarios) ── */
+/* ── Additional containers (scenarios) ── */
 
 int container_deploy(const char *name, const char *image, int ssh_port,
                      const char **extra_nets, int nnets)
 {
     if (!image_exists(image)) {
-        fprintf(stderr, "[container] Image %s introuvable.\n", image);
+        fprintf(stderr, "[container] Image %s not found.\n", image);
         return -1;
     }
 
     if (!container_exists(name)) {
-        fprintf(stderr, "[container] Déploiement du conteneur %s...\n", name);
+        fprintf(stderr, "[container] Deploying container %s...\n", name);
         if (container_start_new(name, ssh_port, image, 0) != 0) {
-            fprintf(stderr, "[container] Échec du déploiement de %s.\n", name);
+            fprintf(stderr, "[container] Failed to deploy %s.\n", name);
             return -1;
         }
-        /* Connexion aux réseaux additionnels */
+        /* Connect to additional networks */
         char cmd[CMD_BUF];
         for (int i = 0; i < nnets; i++) {
             snprintf(cmd, sizeof(cmd),
                 "podman network connect %s %s", extra_nets[i], name);
             if (run_silent(cmd) != 0)
-                fprintf(stderr, "[container] Impossible de connecter %s au réseau %s.\n",
+                fprintf(stderr, "[container] Cannot connect %s to network %s.\n",
                         name, extra_nets[i]);
         }
     } else if (!container_is_running(name)) {
@@ -190,7 +190,7 @@ int container_deploy(const char *name, const char *image, int ssh_port,
     }
 
     if (wait_for_ssh(ssh_port, SSH_WAIT_S) < 0) {
-        fprintf(stderr, "[container] SSH de %s non disponible après %ds.\n", name, SSH_WAIT_S);
+        fprintf(stderr, "[container] SSH for %s unavailable after %ds.\n", name, SSH_WAIT_S);
         return -1;
     }
     return 0;
@@ -200,9 +200,9 @@ int container_network_create(const char *name)
 {
     char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman network exists %s", name);
-    if (run_silent(cmd) == 0) return 0;   /* déjà présent */
+    if (run_silent(cmd) == 0) return 0;   /* already present */
 
-    fprintf(stderr, "[container] Création du réseau %s...\n", name);
+    fprintf(stderr, "[container] Creating network %s...\n", name);
     snprintf(cmd, sizeof(cmd), "podman network create %s", name);
     return run_silent(cmd) == 0 ? 0 : -1;
 }

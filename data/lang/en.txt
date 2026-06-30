@@ -130,6 +130,7 @@ Depassement PSU : puissance totale insuffisante.=PSU overload: total power draw 
 Usage : /hardware remove <serveur> <comp-id>=Usage: /hardware remove <server> <comp-id>
 Composant non installe sur ce serveur.=Component not installed on this server.
 Usage : /hardware show <serveur>=Usage: /hardware show <server>
+Composant '%s' retire de '%s'.=Component '%s' removed from '%s'.
 Usage : /hardware list|install|remove|show=Usage: /hardware list|install|remove|show
   /hardware list [cpu|dimm|sata|m2|u2|pcie_x16|...]=  /hardware list [cpu|dimm|sata|m2|u2|pcie_x16|...]
   /hardware install <srv> <comp-id>=  /hardware install <srv> <comp-id>
@@ -139,3 +140,4 @@ Usage : /hardware list|install|remove|show=Usage: /hardware list|install|remove|
 # ── Commandes globales ─────────────────────────────────────────────────
 Commandes : /deploy /stop /network /rack /server /switch /cable /hardware /exit=Commands: /deploy /stop /network /rack /server /switch /cable /hardware /exit
   /hardware list|install|remove|show  pour gerer le materiel=  /hardware list|install|remove|show  to manage hardware
+Usage : /switch delete <nom>=Usage: /switch delete <name>
