@@ -71,6 +71,7 @@ int infra_server_add(Infra *inf, const char *name, const char *rack,
     if (!slot_free(inf, rack, slot, size_u)) return -5;
 
     PhysServer *s = &inf->servers[inf->nservers];
+    memset(s, 0, sizeof(*s));
     strncpy(s->name, name, 31);
     strncpy(s->rack, rack, 31);
     s->slot    = slot;
@@ -80,6 +81,9 @@ int infra_server_add(Infra *inf, const char *name, const char *rack,
     s->disk_gb = disk_gb > 0 ? disk_gb : 100;
     s->powered = 0;
     s->port    = PHYS_SSH_BASE + inf->nservers;
+    s->has_ipmi       = 1;
+    s->max_ram_slots  = HW_RAM_SLOTS;
+    s->max_disk_slots = HW_DISK_SLOTS;
     inf->nservers++;
     return 0;
 }
@@ -117,6 +121,81 @@ int infra_cable_connect(Infra *inf, const char *server, const char *nic,
     strncpy(c->nic,    nic,     7);
     strncpy(c->sw,     sw,     31);
     c->port = port;
+    return 0;
+}
+
+int infra_server_add_model(Infra *inf, const char *name, const char *rack,
+                           int slot, int size_u, int has_ipmi,
+                           int max_ram, int max_disk, const char *model_id) {
+    int rc = infra_server_add(inf, name, rack, slot, size_u, 1, 2048, 100);
+    if (rc != 0) return rc;
+    PhysServer *s = infra_find_server(inf, name);
+    if (s) {
+        s->has_ipmi       = has_ipmi;
+        s->max_ram_slots  = max_ram  > 0 && max_ram  < HW_RAM_SLOTS  ? max_ram  : HW_RAM_SLOTS;
+        s->max_disk_slots = max_disk > 0 && max_disk < HW_DISK_SLOTS ? max_disk : HW_DISK_SLOTS;
+        if (model_id && model_id[0]) strncpy(s->model_id, model_id, 31);
+    }
+    return 0;
+}
+
+/* Trouve le subslot libre (0 ou 1) pour un mini PC dans un slot 1U.
+ * Retourne -1 si le slot est plein ou bloqué par un serveur régulier/switch. */
+static int minipc_free_subslot(const Infra *inf, const char *rack, int slot) {
+    for (int i = 0; i < inf->nswitches; i++) {
+        if (strcmp(inf->switches[i].rack, rack) != 0) continue;
+        int s = inf->switches[i].slot;
+        int e = s + inf->switches[i].size_u - 1;
+        if (slot >= s && slot <= e) return -1;
+    }
+    for (int i = 0; i < inf->nservers; i++) {
+        if (strcmp(inf->servers[i].rack, rack) != 0) continue;
+        if (!inf->servers[i].is_minipc) {
+            int s = inf->servers[i].slot;
+            int e = s + inf->servers[i].size_u - 1;
+            if (slot >= s && slot <= e) return -1;
+        }
+    }
+    int used[2] = {0, 0};
+    for (int i = 0; i < inf->nservers; i++) {
+        if (strcmp(inf->servers[i].rack, rack) != 0) continue;
+        if (inf->servers[i].slot != slot || !inf->servers[i].is_minipc) continue;
+        int ss = inf->servers[i].subslot;
+        if (ss == 0 || ss == 1) used[ss] = 1;
+    }
+    if (!used[0]) return 0;
+    if (!used[1]) return 1;
+    return -1;
+}
+
+int infra_minipc_add(Infra *inf, const char *name, const char *rack,
+                     int slot, int max_ram, int max_disk, const char *model_id) {
+    if (inf->nservers >= MAX_SERVERS) return -1;
+    if (!infra_find_rack(inf, rack))  return -2;
+    if (infra_find_server(inf, name)) return -3;
+    if (slot < 1)                     return -4;
+
+    int subslot = minipc_free_subslot(inf, rack, slot);
+    if (subslot < 0) return -5;
+
+    PhysServer *s = &inf->servers[inf->nservers];
+    memset(s, 0, sizeof(*s));
+    strncpy(s->name, name, 31);
+    strncpy(s->rack, rack, 31);
+    s->slot    = slot;
+    s->size_u  = 1;
+    s->cpu     = 1;
+    s->ram_mb  = 2048;
+    s->disk_gb = 100;
+    s->powered = 0;
+    s->port    = PHYS_SSH_BASE + inf->nservers;
+    s->is_minipc      = 1;
+    s->subslot        = subslot;
+    s->has_ipmi       = 0;
+    s->max_ram_slots  = max_ram  > 0 && max_ram  < HW_RAM_SLOTS  ? max_ram  : 2;
+    s->max_disk_slots = max_disk > 0 && max_disk < HW_DISK_SLOTS ? max_disk : 1;
+    if (model_id && model_id[0]) strncpy(s->model_id, model_id, 31);
+    inf->nservers++;
     return 0;
 }
 
@@ -162,16 +241,29 @@ void infra_rack_render(const Infra *inf, const char *rack_name,
 
     int u = 1;
     while (u <= rack->units) {
+        /* Cherche un serveur régulier au slot u */
         const PhysServer *srv = NULL;
         for (int i = 0; i < inf->nservers; i++)
             if (strcmp(inf->servers[i].rack, rack_name) == 0 &&
-                inf->servers[i].slot == u) { srv = &inf->servers[i]; break; }
+                inf->servers[i].slot == u &&
+                !inf->servers[i].is_minipc) { srv = &inf->servers[i]; break; }
 
         const PhysSwitch *sw = NULL;
         if (!srv)
             for (int i = 0; i < inf->nswitches; i++)
                 if (strcmp(inf->switches[i].rack, rack_name) == 0 &&
                     inf->switches[i].slot == u) { sw = &inf->switches[i]; break; }
+
+        /* Cherche des mini PCs au slot u */
+        const PhysServer *mini[2] = {NULL, NULL};
+        if (!srv && !sw) {
+            for (int i = 0; i < inf->nservers; i++) {
+                if (strcmp(inf->servers[i].rack, rack_name) != 0) continue;
+                if (inf->servers[i].slot != u || !inf->servers[i].is_minipc) continue;
+                int ss = inf->servers[i].subslot;
+                if (ss == 0 || ss == 1) mini[ss] = &inf->servers[i];
+            }
+        }
 
         if (srv) {
             addl(lines, nlines, max_lines,
@@ -185,6 +277,15 @@ void infra_rack_render(const Infra *inf, const char *rack_name,
                  u, sw->name, sw->ports,
                  sw->powered ? "ON " : "OFF");
             u += sw->size_u;
+        } else if (mini[0] || mini[1]) {
+            const char *n0 = mini[0] ? mini[0]->name : "(libre)";
+            const char *n1 = mini[1] ? mini[1]->name : "(libre)";
+            const char *s0 = mini[0] ? (mini[0]->powered ? "ON " : "OFF") : "---";
+            const char *s1 = mini[1] ? (mini[1]->powered ? "ON " : "OFF") : "---";
+            addl(lines, nlines, max_lines,
+                 "| %2dU [MNI] %-9s[%s]  %-9s[%s] |",
+                 u, n0, s0, n1, s1);
+            u++;
         } else {
             addl(lines, nlines, max_lines,
                  "| %2dU  %-38s |", u, "");
@@ -235,6 +336,84 @@ void infra_list_switches(const Infra *inf, const char *rack,
     }
     if (*nlines == 0)
         addl(lines, nlines, max_lines, "  (aucun switch)");
+}
+
+void infra_server_show(const Infra *inf, const char *name,
+                       char lines[][128], int *nlines, int max_lines) {
+    *nlines = 0;
+    const PhysServer *srv = NULL;
+    for (int i = 0; i < inf->nservers; i++)
+        if (strcmp(inf->servers[i].name, name) == 0) { srv = &inf->servers[i]; break; }
+    if (!srv) {
+        addl(lines, nlines, max_lines, "Serveur '%s' introuvable.", name);
+        return;
+    }
+
+    addl(lines, nlines, max_lines, "Serveur : %s%s",
+         srv->name, srv->has_ipmi ? "" : "  [pas d'IPMI]");
+    if (srv->model_id[0])
+        addl(lines, nlines, max_lines, "  Modele : %s", srv->model_id);
+    if (srv->is_minipc)
+        addl(lines, nlines, max_lines, "  Baie   : %-12s slot %d  (mini PC subslot %d)",
+             srv->rack, srv->slot, srv->subslot);
+    else
+        addl(lines, nlines, max_lines, "  Baie   : %-12s slot %d  (%dU)",
+             srv->rack, srv->slot, srv->size_u);
+    addl(lines, nlines, max_lines, "  CPU    : %d coeur%s",
+         srv->cpu, srv->cpu > 1 ? "s" : "");
+    addl(lines, nlines, max_lines, "  RAM    : %d MB", srv->ram_mb);
+    addl(lines, nlines, max_lines, "  Disque : %d GB", srv->disk_gb);
+
+    if (srv->powered)
+        addl(lines, nlines, max_lines, "  Etat   : ON  (SSH :%-4d)", srv->port);
+    else
+        addl(lines, nlines, max_lines, "  Etat   : OFF");
+
+    int ncables = 0;
+    for (int i = 0; i < inf->ncables; i++)
+        if (strcmp(inf->cables[i].server, name) == 0) ncables++;
+
+    if (ncables == 0) {
+        addl(lines, nlines, max_lines, "  Cables : (aucun)");
+    } else {
+        addl(lines, nlines, max_lines, "  Cables :");
+        for (int i = 0; i < inf->ncables; i++)
+            if (strcmp(inf->cables[i].server, name) == 0)
+                addl(lines, nlines, max_lines, "    %-6s ->  %s:port%d",
+                     inf->cables[i].nic, inf->cables[i].sw, inf->cables[i].port);
+    }
+}
+
+void infra_switch_show(const Infra *inf, const char *name,
+                       char lines[][128], int *nlines, int max_lines) {
+    *nlines = 0;
+    const PhysSwitch *sw = NULL;
+    for (int i = 0; i < inf->nswitches; i++)
+        if (strcmp(inf->switches[i].name, name) == 0) { sw = &inf->switches[i]; break; }
+    if (!sw) {
+        addl(lines, nlines, max_lines, "Switch '%s' introuvable.", name);
+        return;
+    }
+
+    addl(lines, nlines, max_lines, "Switch : %s", sw->name);
+    addl(lines, nlines, max_lines, "  Baie   : %-12s slot %d  (%dU)",
+         sw->rack, sw->slot, sw->size_u);
+    addl(lines, nlines, max_lines, "  Ports  : %d", sw->ports);
+    addl(lines, nlines, max_lines, "  Etat   : %s", sw->powered ? "ON" : "OFF");
+
+    int ncables = 0;
+    for (int i = 0; i < inf->ncables; i++)
+        if (strcmp(inf->cables[i].sw, name) == 0) ncables++;
+
+    if (ncables == 0) {
+        addl(lines, nlines, max_lines, "  Connexions : (aucune)");
+    } else {
+        addl(lines, nlines, max_lines, "  Connexions :");
+        for (int i = 0; i < inf->ncables; i++)
+            if (strcmp(inf->cables[i].sw, name) == 0)
+                addl(lines, nlines, max_lines, "    port%-3d  <-  %s:%s",
+                     inf->cables[i].port, inf->cables[i].server, inf->cables[i].nic);
+    }
 }
 
 void infra_list_cables(const Infra *inf,
@@ -338,13 +517,15 @@ void infra_save(const Infra *inf, const char *path) {
     for (int i = 0; i < inf->nracks; i++)
         fprintf(f, "RACK:%s:%d\n",
                 inf->racks[i].name, inf->racks[i].units);
-    for (int i = 0; i < inf->nservers; i++)
-        fprintf(f, "SRV:%s:%s:%d:%d:%d:%d:%d:%d:%d\n",
-                inf->servers[i].name, inf->servers[i].rack,
-                inf->servers[i].slot,  inf->servers[i].size_u,
-                inf->servers[i].cpu,   inf->servers[i].ram_mb,
-                inf->servers[i].disk_gb, inf->servers[i].powered,
-                inf->servers[i].port);
+    for (int i = 0; i < inf->nservers; i++) {
+        const PhysServer *s = &inf->servers[i];
+        fprintf(f, "SRV:%s:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\n",
+                s->name, s->rack, s->slot, s->size_u,
+                s->cpu, s->ram_mb, s->disk_gb, s->powered, s->port,
+                s->has_ipmi, s->is_minipc, s->subslot,
+                s->max_ram_slots, s->max_disk_slots,
+                s->model_id[0] ? s->model_id : "-");
+    }
     for (int i = 0; i < inf->nswitches; i++)
         fprintf(f, "SW:%s:%s:%d:%d:%d:%d\n",
                 inf->switches[i].name, inf->switches[i].rack,
@@ -354,6 +535,18 @@ void infra_save(const Infra *inf, const char *path) {
         fprintf(f, "CBL:%s:%s:%s:%d\n",
                 inf->cables[i].server, inf->cables[i].nic,
                 inf->cables[i].sw,     inf->cables[i].port);
+    /* Composants hardware */
+    for (int i = 0; i < inf->nservers; i++) {
+        const PhysServer *s = &inf->servers[i];
+        if (s->hw_cpu[0])
+            fprintf(f, "HW:%s:cpu:%s\n", s->name, s->hw_cpu);
+        for (int j = 0; j < HW_RAM_SLOTS; j++)
+            if (s->hw_ram[j][0])
+                fprintf(f, "HW:%s:ram:%d:%s\n", s->name, j, s->hw_ram[j]);
+        for (int j = 0; j < HW_DISK_SLOTS; j++)
+            if (s->hw_disk[j][0])
+                fprintf(f, "HW:%s:disk:%d:%s\n", s->name, j, s->hw_disk[j]);
+    }
     fclose(f);
 }
 
@@ -369,14 +562,33 @@ void infra_load(Infra *inf, const char *path) {
                 infra_rack_create(inf, name, units);
 
         } else if (strncmp(line, "SRV:", 4) == 0) {
-            char name[32], rack[32];
+            char name[32], rack[32], model_id[32] = "";
             int slot, size_u, cpu, ram_mb, disk_gb, powered, port;
-            if (sscanf(line + 4, "%31[^:]:%31[^:]:%d:%d:%d:%d:%d:%d:%d",
-                    name, rack, &slot, &size_u, &cpu,
-                    &ram_mb, &disk_gb, &powered, &port) == 9) {
-                infra_server_add(inf, name, rack, slot, size_u, cpu, ram_mb, disk_gb);
-                PhysServer *s = infra_find_server(inf, name);
-                if (s) { s->powered = powered; s->port = port; }
+            int has_ipmi = 1, is_minipc = 0, subslot = 0;
+            int max_ram = HW_RAM_SLOTS, max_disk = HW_DISK_SLOTS;
+            int n = sscanf(line + 4,
+                "%31[^:]:%31[^:]:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%31[^\n]",
+                name, rack, &slot, &size_u, &cpu, &ram_mb, &disk_gb,
+                &powered, &port,
+                &has_ipmi, &is_minipc, &subslot, &max_ram, &max_disk, model_id);
+            if (n >= 9) {
+                if (is_minipc) {
+                    infra_minipc_add(inf, name, rack, slot, max_ram, max_disk,
+                                     (n >= 15 && model_id[0] && model_id[0] != '-') ? model_id : "");
+                    PhysServer *s = infra_find_server(inf, name);
+                    if (s) { s->powered = powered; s->port = port; s->subslot = subslot; }
+                } else {
+                    infra_server_add(inf, name, rack, slot, size_u, cpu, ram_mb, disk_gb);
+                    PhysServer *s = infra_find_server(inf, name);
+                    if (s) {
+                        s->powered = powered; s->port = port;
+                        if (n >= 10) s->has_ipmi  = has_ipmi;
+                        if (n >= 13) s->max_ram_slots  = max_ram;
+                        if (n >= 14) s->max_disk_slots = max_disk;
+                        if (n >= 15 && model_id[0] && model_id[0] != '-')
+                            strncpy(s->model_id, model_id, 31);
+                    }
+                }
             }
 
         } else if (strncmp(line, "SW:", 3) == 0) {
@@ -394,6 +606,26 @@ void infra_load(Infra *inf, const char *path) {
             if (sscanf(line + 4, "%31[^:]:%7[^:]:%31[^:]:%d",
                     server, nic, sw, &port) == 4)
                 infra_cable_connect(inf, server, nic, sw, port);
+
+        } else if (strncmp(line, "HW:", 3) == 0) {
+            char server[32], kind[8], extra[64] = "";
+            if (sscanf(line + 3, "%31[^:]:%7[^:]:%63[^\n]",
+                       server, kind, extra) < 2) continue;
+            PhysServer *s = infra_find_server(inf, server);
+            if (!s) continue;
+            if (strcmp(kind, "cpu") == 0) {
+                strncpy(s->hw_cpu, extra, 31);
+            } else if (strcmp(kind, "ram") == 0) {
+                int slot = -1; char comp[32] = "";
+                if (sscanf(extra, "%d:%31[^\n]", &slot, comp) == 2 &&
+                    slot >= 0 && slot < HW_RAM_SLOTS)
+                    strncpy(s->hw_ram[slot], comp, 31);
+            } else if (strcmp(kind, "disk") == 0) {
+                int slot = -1; char comp[32] = "";
+                if (sscanf(extra, "%d:%31[^\n]", &slot, comp) == 2 &&
+                    slot >= 0 && slot < HW_DISK_SLOTS)
+                    strncpy(s->hw_disk[slot], comp, 31);
+            }
         }
     }
     fclose(f);

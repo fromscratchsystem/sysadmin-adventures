@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "shell.h"
 #include <locale.h>
+#include <stdarg.h>
 #include <string.h>
 
 /* ═══════════════════════════════════════════════════════════════
@@ -223,6 +224,15 @@ void narrator_say(Panel *p, const char *msg) {
     /* Re-rend uniquement si on est en vue live */
     if (g_nb_offset == 0)
         narrator_render(p);
+}
+
+void narrator_printf(Panel *p, const char *fmt, ...) {
+    char msg[NARRATOR_LINE];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    narrator_say(p, msg);
 }
 
 void narrator_scroll(Panel *p, int delta) {

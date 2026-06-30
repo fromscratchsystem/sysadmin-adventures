@@ -7,34 +7,50 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define CMD_BUF    512
+#define SSH_WAIT_S  15
+
 static int run_silent(const char *cmd)
 {
-    char buf[1024];
+    char buf[CMD_BUF + 32];
     snprintf(buf, sizeof(buf), "%s >/dev/null 2>&1", cmd);
     return system(buf);
 }
 
 static int image_exists(const char *image)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman image exists %s", image);
     return run_silent(cmd) == 0;
 }
 
 static int container_exists(const char *name)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman container exists %s", name);
     return run_silent(cmd) == 0;
 }
 
 int container_is_running(const char *name)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd),
         "podman inspect --format '{{.State.Running}}' %s 2>/dev/null | grep -q true",
         name);
     return system(cmd) == 0;
+}
+
+/* Lance un nouveau conteneur avec les capabilities sysadmin standard. */
+static int container_start_new(const char *name, int port, const char *image)
+{
+    char cmd[CMD_BUF];
+    snprintf(cmd, sizeof(cmd),
+        "podman run -d --name %s"
+        " --network %s --hostname %s"
+        " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
+        " -p 127.0.0.1:%d:22 %s",
+        name, CONTAINER_NETWORK, name, port, image);
+    return run_silent(cmd);
 }
 
 static int tcp_probe(int port)
@@ -95,22 +111,13 @@ int container_ensure_running(void)
 
     if (!container_exists(CONTAINER_NAME)) {
         fprintf(stderr, "[container] Création du conteneur %s...\n", CONTAINER_NAME);
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd),
-            "podman run -d --name %s"
-            " --network %s --hostname %s"
-            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
-            " -p 127.0.0.1:%d:22 %s",
-            CONTAINER_NAME,
-            CONTAINER_NETWORK, CONTAINER_NAME,
-            CONTAINER_SSH_PORT, CONTAINER_IMAGE);
-        if (run_silent(cmd) != 0) {
+        if (container_start_new(CONTAINER_NAME, CONTAINER_SSH_PORT, CONTAINER_IMAGE) != 0) {
             fprintf(stderr, "[container] Échec de la création.\n");
             return -1;
         }
     } else if (!container_is_running(CONTAINER_NAME)) {
         fprintf(stderr, "[container] Démarrage du conteneur %s...\n", CONTAINER_NAME);
-        char cmd[256];
+        char cmd[CMD_BUF];
         snprintf(cmd, sizeof(cmd), "podman start %s", CONTAINER_NAME);
         if (run_silent(cmd) != 0) {
             fprintf(stderr, "[container] Échec du démarrage.\n");
@@ -118,8 +125,8 @@ int container_ensure_running(void)
         }
     }
 
-    if (wait_for_ssh(CONTAINER_SSH_PORT, 15) < 0) {
-        fprintf(stderr, "[container] SSH non disponible après 15s.\n");
+    if (wait_for_ssh(CONTAINER_SSH_PORT, SSH_WAIT_S) < 0) {
+        fprintf(stderr, "[container] SSH non disponible après %ds.\n", SSH_WAIT_S);
         return -1;
     }
     return 0;
@@ -137,20 +144,12 @@ int container_deploy(const char *name, const char *image, int ssh_port,
 
     if (!container_exists(name)) {
         fprintf(stderr, "[container] Déploiement du conteneur %s...\n", name);
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd),
-            "podman run -d --name %s"
-            " --network %s --hostname %s"
-            " --cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE"
-            " -p 127.0.0.1:%d:22 %s",
-            name,
-            CONTAINER_NETWORK, name,
-            ssh_port, image);
-        if (run_silent(cmd) != 0) {
+        if (container_start_new(name, ssh_port, image) != 0) {
             fprintf(stderr, "[container] Échec du déploiement de %s.\n", name);
             return -1;
         }
         /* Connexion aux réseaux additionnels */
+        char cmd[CMD_BUF];
         for (int i = 0; i < nnets; i++) {
             snprintf(cmd, sizeof(cmd),
                 "podman network connect %s %s", extra_nets[i], name);
@@ -159,13 +158,13 @@ int container_deploy(const char *name, const char *image, int ssh_port,
                         name, extra_nets[i]);
         }
     } else if (!container_is_running(name)) {
-        char cmd[256];
+        char cmd[CMD_BUF];
         snprintf(cmd, sizeof(cmd), "podman start %s", name);
         if (run_silent(cmd) != 0) return -1;
     }
 
-    if (wait_for_ssh(ssh_port, 15) < 0) {
-        fprintf(stderr, "[container] SSH de %s non disponible après 15s.\n", name);
+    if (wait_for_ssh(ssh_port, SSH_WAIT_S) < 0) {
+        fprintf(stderr, "[container] SSH de %s non disponible après %ds.\n", name, SSH_WAIT_S);
         return -1;
     }
     return 0;
@@ -173,7 +172,7 @@ int container_deploy(const char *name, const char *image, int ssh_port,
 
 int container_network_create(const char *name)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman network exists %s", name);
     if (run_silent(cmd) == 0) return 0;   /* déjà présent */
 
@@ -184,14 +183,14 @@ int container_network_create(const char *name)
 
 int container_network_delete(const char *name)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman network rm %s", name);
     return run_silent(cmd) == 0 ? 0 : -1;
 }
 
 void container_stop(const char *name)
 {
-    char cmd[256];
+    char cmd[CMD_BUF];
     snprintf(cmd, sizeof(cmd), "podman stop %s", name);
     run_silent(cmd);
 }

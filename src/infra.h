@@ -11,6 +11,10 @@
 #define RACK_DEFAULT_U   42
 #define PHYS_SSH_BASE  2300   /* ports 2300-2331 réservés aux serveurs physiques */
 
+/* ─── Slots hardware par serveur ─────────────────────────────── */
+#define HW_RAM_SLOTS   4
+#define HW_DISK_SLOTS  4
+
 /* ─── Baie de brassage ───────────────────────────────────────── */
 typedef struct {
     char name[32];
@@ -21,13 +25,24 @@ typedef struct {
 typedef struct {
     char name[32];
     char rack[32];
-    int  slot;      /* position dans la baie (base 1) */
-    int  size_u;    /* hauteur en U */
-    int  cpu;       /* nombre de cœurs */
-    int  ram_mb;
-    int  disk_gb;
-    int  powered;   /* 1 = allumé */
-    int  port;      /* port SSH hôte alloué */
+    int  slot;           /* position dans la baie (base 1) */
+    int  size_u;         /* hauteur en U (1 pour les mini PCs aussi) */
+    int  cpu;            /* cœurs — recalculé depuis hw_cpu si installé */
+    int  ram_mb;         /* RAM  — recalculée depuis hw_ram[] */
+    int  disk_gb;        /* disk — recalculé depuis hw_disk[] */
+    int  powered;
+    int  port;
+    /* Forme et gestion */
+    int  is_minipc;      /* 1 = mini PC (2 par 1U) */
+    int  subslot;        /* 0 ou 1 dans le même U (mini PC seulement) */
+    int  has_ipmi;       /* 0 = pas d'IPMI, intervention physique requise */
+    int  max_ram_slots;  /* limite du modèle (0 = HW_RAM_SLOTS) */
+    int  max_disk_slots; /* limite du modèle (0 = HW_DISK_SLOTS) */
+    char model_id[32];   /* id du modèle de châssis, "" si aucun */
+    /* Composants matériels installés (IDs du catalogue, "" = vide) */
+    char hw_cpu [32];
+    char hw_ram [HW_RAM_SLOTS ][32];
+    char hw_disk[HW_DISK_SLOTS][32];
 } PhysServer;
 
 /* ─── Switch physique ────────────────────────────────────────── */
@@ -74,6 +89,20 @@ PhysSwitch *infra_find_switch(Infra *inf, const char *name);
 int infra_rack_create  (Infra *inf, const char *name, int units);
 int infra_server_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int cpu, int ram_mb, int disk_gb);
+/*
+ * Ajout avec modèle de châssis (size_u, has_ipmi, max_slots depuis le modèle).
+ * Retourne les mêmes codes qu'infra_server_add, plus :
+ *          -7 : modèle inconnu
+ */
+int infra_server_add_model(Infra *inf, const char *name, const char *rack,
+                           int slot, int size_u, int has_ipmi,
+                           int max_ram, int max_disk, const char *model_id);
+/*
+ * Ajout d'un mini PC (2 par 1U, subslot auto-assigné).
+ * Retourne les mêmes codes qu'infra_server_add.
+ */
+int infra_minipc_add   (Infra *inf, const char *name, const char *rack,
+                        int slot, int max_ram, int max_disk, const char *model_id);
 int infra_switch_add   (Infra *inf, const char *name, const char *rack,
                         int slot, int size_u, int ports);
 int infra_cable_connect(Infra *inf, const char *server, const char *nic,
@@ -97,6 +126,10 @@ int infra_server_nets(const Infra *inf, const char *server,
 
 /* ── Rendu texte (sans dépendance ncurses) ────────────────────── */
 void infra_rack_render   (const Infra *inf, const char *rack_name,
+                          char lines[][128], int *nlines, int max_lines);
+void infra_server_show   (const Infra *inf, const char *name,
+                          char lines[][128], int *nlines, int max_lines);
+void infra_switch_show   (const Infra *inf, const char *name,
                           char lines[][128], int *nlines, int max_lines);
 void infra_list_racks    (const Infra *inf,
                           char lines[][128], int *nlines, int max_lines);

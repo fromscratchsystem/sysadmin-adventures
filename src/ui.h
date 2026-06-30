@@ -35,6 +35,7 @@ void redraw_input(WINDOW *input_win, const char *buf, int pos);
 
 /* ─── Affichage dans les panels ──────────────────────────────── */
 void narrator_say    (Panel *p, const char *msg);
+void narrator_printf (Panel *p, const char *fmt, ...); /* raccourci snprintf+say */
 void narrator_scroll (Panel *p, int delta);   /* >0=remonter, <0=descendre */
 void narrator_refresh(Panel *p);              /* re-rend après resize */
 void shell_print     (Panel *p, const char *line);

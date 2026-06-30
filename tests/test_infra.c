@@ -316,6 +316,77 @@ TEST(save_load_roundtrip) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+ * Suite : show server / show switch
+ * ═══════════════════════════════════════════════════════════════ */
+
+TEST(server_show_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "web01", "rack-A", 3, 2, 8, 16384, 500);
+    infra_switch_add(&inf, "sw1", "rack-A", 10, 1, 24);
+    infra_cable_connect(&inf, "web01", "eth0", "sw1", 1);
+    infra_cable_connect(&inf, "web01", "eth1", "sw1", 2);
+
+    char lines[32][128]; int nl = 0;
+    infra_server_show(&inf, "web01", lines, &nl, 32);
+
+    ASSERT_GT(nl, 0);
+    /* Première ligne : nom du serveur */
+    ASSERT_NE(strstr(lines[0], "web01"), NULL);
+    /* Doit mentionner le rack et le slot */
+    int found_rack = 0;
+    for (int i = 0; i < nl; i++)
+        if (strstr(lines[i], "rack-A") && strstr(lines[i], "3")) { found_rack = 1; break; }
+    ASSERT_EQ(found_rack, 1);
+    /* Doit lister les deux câbles */
+    int found_eth0 = 0, found_eth1 = 0;
+    for (int i = 0; i < nl; i++) {
+        if (strstr(lines[i], "eth0")) found_eth0 = 1;
+        if (strstr(lines[i], "eth1")) found_eth1 = 1;
+    }
+    ASSERT_EQ(found_eth0, 1);
+    ASSERT_EQ(found_eth1, 1);
+}
+
+TEST(server_show_unknown) {
+    Infra inf = {0};
+    char lines[8][128]; int nl = 0;
+    infra_server_show(&inf, "ghost", lines, &nl, 8);
+    ASSERT_GT(nl, 0);
+    ASSERT_NE(strstr(lines[0], "ghost"), NULL);
+}
+
+TEST(switch_show_basic) {
+    Infra inf = make_infra_with_rack();
+    infra_server_add(&inf, "db01", "rack-A", 1, 1, 4, 8192, 200);
+    infra_switch_add(&inf, "core-sw", "rack-A", 5, 1, 48);
+    infra_cable_connect(&inf, "db01", "eth0", "core-sw", 7);
+
+    char lines[32][128]; int nl = 0;
+    infra_switch_show(&inf, "core-sw", lines, &nl, 32);
+
+    ASSERT_GT(nl, 0);
+    ASSERT_NE(strstr(lines[0], "core-sw"), NULL);
+    /* Doit mentionner le nombre de ports */
+    int found_ports = 0;
+    for (int i = 0; i < nl; i++)
+        if (strstr(lines[i], "48")) { found_ports = 1; break; }
+    ASSERT_EQ(found_ports, 1);
+    /* Doit lister la connexion db01:eth0 sur port 7 */
+    int found_conn = 0;
+    for (int i = 0; i < nl; i++)
+        if (strstr(lines[i], "db01") && strstr(lines[i], "eth0")) { found_conn = 1; break; }
+    ASSERT_EQ(found_conn, 1);
+}
+
+TEST(switch_show_unknown) {
+    Infra inf = {0};
+    char lines[8][128]; int nl = 0;
+    infra_switch_show(&inf, "ghost-sw", lines, &nl, 8);
+    ASSERT_GT(nl, 0);
+    ASSERT_NE(strstr(lines[0], "ghost-sw"), NULL);
+}
+
+/* ═══════════════════════════════════════════════════════════════
  * main
  * ═══════════════════════════════════════════════════════════════ */
 
@@ -359,6 +430,12 @@ int main(void) {
     cable_disconnect_basic();
     cable_disconnect_unknown();
     cable_server_nets();
+
+    puts("-- show --");
+    server_show_basic();
+    server_show_unknown();
+    switch_show_basic();
+    switch_show_unknown();
 
     puts("-- persistance --");
     save_load_roundtrip();

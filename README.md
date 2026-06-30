@@ -7,22 +7,22 @@ Jeu de terminal en C dans lequel le joueur gère un datacenter fictif situé en 
 ## Architecture globale
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  main.c  — boucle principale, narrateur, commandes  │
-├──────────┬──────────────┬────────────┬──────────────┤
-│  ui.c    │  shell.c     │ container.c│  history.c   │
-│ ncurses  │  SSH/PTY     │  Podman    │  historique  │
-│ layout   │  libssh2     │  CLI       │  commandes   │
-├──────────┴──────────────┴────────────┴──────────────┤
-│  vterm.c — émulateur VT100 maison (parseur ANSI)    │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  main.c  — boucle principale + 7 handlers de commandes       │
+├───────────┬─────────────┬────────────┬──────────┬────────────┤
+│  ui.c     │  shell.c    │container.c │ infra.c  │ history.c  │
+│ ncurses   │  SSH/PTY    │  Podman    │ datacenter│ commandes  │
+│ layout    │  libssh2    │  CLI       │ physique │ historique │
+├───────────┴─────────────┴────────────┴──────────┴────────────┤
+│  vterm.c — émulateur VT100 maison (parseur ANSI + scrollback)│
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Flux de données
 
 ```
 Clavier → main.c → shell_send_line() → libssh2 → PTY conteneur
-                                                        │
+                                                       │
 Écran ← vterm_render() ← vterm_process() ← libssh2 ←──┘
 ```
 
@@ -47,7 +47,7 @@ Inclus par tous les autres fichiers. Définit :
 
 - `Panel` — fenêtre ncurses avec bordure + zone de contenu (`border` / `inner`).
 - `Layout` — ensemble complet des fenêtres : `narrator`, `tab_bar`, `shell`, `status`, `input_win`.
-- `Shell` — état d'une connexion SSH vers un conteneur : socket TCP, session/canal libssh2, émulateur `VTerm`, indicateur d'activité.
+- `Shell` — état d'une connexion SSH : socket TCP, session/canal libssh2, émulateur `VTerm`, indicateur d'activité, réseaux additionnels.
 - `History` — ring-buffer circulaire de `HISTORY_MAX` entrées avec curseur de navigation.
 
 ---
@@ -58,9 +58,11 @@ Inclus par tous les autres fichiers. Définit :
 
 1. `container_init_network()` — crée le réseau Podman avant ncurses (appels `system()` qui écrivent sur stderr).
 2. `container_ensure_running()` — build/démarre le conteneur principal.
-3. `sigaction(SIGWINCH, …)` — enregistrement du handler de redimensionnement.
-4. `init_ncurses()` + `create_layout()` — création de l'UI.
-5. `attach_shell()` — ouverture de la première connexion SSH.
+3. `infra_load()` + recréation des réseaux Podman des switches (idempotent).
+4. `sigaction(SIGWINCH, …)` — enregistrement du handler de redimensionnement.
+5. `init_ncurses()` + `create_layout()` — création de l'UI.
+6. `attach_shell()` — ouverture de la première connexion SSH.
+7. `state_load()` — reconnexion aux conteneurs déployés lors d'une session précédente.
 
 **Boucle principale (`select`-based)**
 
@@ -70,17 +72,26 @@ Inclus par tous les autres fichiers. Définit :
 3. Lecture de la sortie SSH pour chaque shell actif → `shell_read_output()`.
 4. Traitement des frappes clavier.
 
-**Commandes interceptées par le jeu**
+**Structure des handlers de commandes**
 
-| Commande | Comportement |
-|---|---|
-| `exit` / `quit` | Ferme le shell actif et quitte |
-| `deploy <nom> [image]` | Déploie un nouveau conteneur et ouvre un onglet |
-| `rm … /` ou `rm … /*` | Bloquée par le narrateur |
-| Fork bomb `:(){ … }` | Bloquée par le narrateur |
-| `ls`, `pwd`, `man`, `sudo`, `help` | Commentaire sarcastique du narrateur, commande exécutée quand même |
+Les commandes jeu (`/…`) sont délégués à sept fonctions statiques. `main()` se contente d'un dispatch linéaire :
 
-**Navigation entre onglets** : touches F1–F8.
+```c
+cmd_network()   // /network create|delete
+cmd_deploy()    // /deploy
+cmd_stop()      // /stop
+cmd_rack()      // /rack create|list|show|delete
+cmd_server()    // /server add|poweron|poweroff|list|delete
+cmd_switch()    // /switch add|poweron|poweroff|list|delete
+cmd_cable()     // /cable connect|disconnect|list
+```
+
+Chaque handler reçoit un `ShCtx *` (pointeurs vers `shells`, `nshells`, `active`, `running`, `layout`) pour les commandes qui manipulent des shells.
+
+**Persistance**
+
+- `~/.sysadmin-game.state` — liste des conteneurs déployés (restaurés au lancement).
+- `~/.sysadmin-game.infra` — état de l'infrastructure physique (racks, serveurs, switches, câbles).
 
 ---
 
@@ -104,8 +115,14 @@ $ █                                                   ← input_win
 - `create_layout()` / `destroy_layout()` / `handle_resize()` — construction et reconstruction du layout. `handle_resize()` détruit l'ancien layout, recrée tout et redimensionne tous les PTY actifs.
 - `draw_tabs()` — affiche `[Fn nom]` pour chaque shell ; met en gras + `!` si activité hors focus.
 - `draw_status()` — date, SLA, tickets en barre verte inversée.
-- `narrator_say()` — `wprintw` avec scroll automatique dans le panel narrateur.
-- `redraw_input()` — réaffiche le prompt `$ ` puis le buffer de saisie positionné au curseur.
+- `narrator_say(p, msg)` — pousse une ligne dans le ring-buffer narrateur et rafraîchit si en vue live.
+- `narrator_printf(p, fmt, …)` — raccourci `vsnprintf` + `narrator_say` (évite les `char msg[N]; snprintf` en dehors de ui.c).
+- `narrator_scroll(p, delta)` — déplace la vue du narrateur ; `delta > 0` = remonter.
+- `redraw_input()` — réaffiche le prompt `$ ` puis le buffer de saisie.
+
+**Historique narrateur**
+
+Le contenu du panel narrateur est stocké dans un ring-buffer statique de 512 lignes × 256 caractères dans `ui.c`. Ce buffer survit aux redimensionnements (contrairement aux fenêtres ncurses qui sont détruites et recréées).
 
 ---
 
@@ -117,12 +134,12 @@ $ █                                                   ← input_win
 2. `libssh2_session_init()` + `libssh2_session_handshake()`.
 3. `libssh2_userauth_password()` (user `player`, mot de passe `datacenter2031`).
 4. Ouverture d'un canal SSH + requête PTY `xterm-256color`.
-5. Passage en mode **non-bloquant** (`O_NONBLOCK`) pour intégration `select()`.
+5. Passage en mode **non-bloquant** pour intégration `select()`.
 6. Allocation du `VTerm` avec `first_pair = 8` (paires 1-7 réservées à l'UI).
 
-**`shell_send_line(sh, cmd)`** — Écrit `cmd + "\n"` sur le canal en boucle (gère `LIBSSH2_ERROR_EAGAIN`).
+**`shell_send_line(sh, cmd)`** — Écrit `cmd + "\n"` sur le canal (gère `LIBSSH2_ERROR_EAGAIN`).
 
-**`shell_read_output(sh, win)`** — Lit jusqu'à 4096 octets par appel, boucle jusqu'à `EAGAIN` ou EOF. Passe les données à `vterm_process()`. Si `win != NULL`, appelle `vterm_render()` pour rafraîchir l'écran.
+**`shell_read_output(sh, win)`** — Lit jusqu'à 4096 octets, boucle jusqu'à `EAGAIN` ou EOF. Passe les données à `vterm_process()`. Si `win != NULL`, appelle `vterm_render()`.
 
 **`shell_resize(sh, rows, cols)`** — `libssh2_channel_request_pty_size()` + `vterm_resize()`.
 
@@ -137,11 +154,16 @@ Toutes les commandes Podman sont lancées via `system()` redirigé vers `/dev/nu
 | Fonction | Description |
 |---|---|
 | `container_init_network()` | Crée le réseau `sysadmin-net` si absent |
-| `container_ensure_running()` | Build l'image si absente (~30 s au premier lancement), crée/démarre le conteneur principal sur le port 2222, attend SSH disponible |
-| `container_deploy(name, image, port)` | Déploie un conteneur supplémentaire sur le réseau partagé, attend SSH |
+| `container_ensure_running()` | Build l'image si absente (~30 s), crée/démarre le conteneur principal sur le port 2222, attend SSH |
+| `container_deploy(name, image, port, nets, nnets)` | Déploie un conteneur, le connecte aux réseaux additionnels, attend SSH |
+| `container_network_create(name)` | Crée un réseau Podman (idempotent) |
+| `container_network_delete(name)` | Supprime un réseau Podman |
 | `container_stop(name)` | `podman stop` sans suppression |
+| `container_is_running(name)` | Teste si le conteneur est en cours d'exécution |
 
-**`wait_for_ssh(port, max_s)`** — Sonde le port TCP toutes les secondes jusqu'à `max_s` tentatives.
+**`wait_for_ssh(port, SSH_WAIT_S)`** — Sonde le port TCP toutes les secondes, jusqu'à `SSH_WAIT_S = 15` tentatives.
+
+La commande `podman run` (avec capabilities) est centralisée dans le helper privé `container_start_new()` pour éviter la duplication entre `container_ensure_running()` et `container_deploy()`.
 
 **Constantes importantes :**
 
@@ -152,7 +174,44 @@ CONTAINER_NETWORK  = "sysadmin-net"
 CONTAINER_SSH_PORT = 2222
 SSH_USER           = "player"
 SSH_PASSWORD       = "datacenter2031"
+CMD_BUF            = 512   // taille des buffers de commandes Podman
+SSH_WAIT_S         = 15    // secondes d'attente SSH
 ```
+
+**Capabilities Podman :** chaque conteneur est lancé avec `--cap-add NET_RAW --cap-add NET_ADMIN --cap-add SYS_PTRACE`, ce qui autorise `ping`, `tcpdump`, `nmap`, `strace`, etc.
+
+---
+
+### `infra.c` / `infra.h` — Infrastructure physique simulée
+
+Simule un datacenter physique : baies (racks), serveurs, switches réseau, câbles. L'état est persisté dans `~/.sysadmin-game.infra`.
+
+**Types :**
+
+| Type | Champs clés |
+|---|---|
+| `Rack` | `name`, `units` (hauteur en U) |
+| `PhysServer` | `name`, `rack`, `slot`, `size_u`, `cpu`, `ram_mb`, `disk_gb`, `port` (SSH), `powered` |
+| `PhysSwitch` | `name`, `rack`, `slot`, `size_u`, `ports`, `powered` |
+| `Cable` | `server`, `nic`, `sw_name`, `sw_port` |
+
+**Codes de retour des fonctions `infra_*_add()` :**
+
+| Code | Signification |
+|---|---|
+| `0` | Succès |
+| `-1` | Limite atteinte |
+| `-2` | Baie inconnue |
+| `-3` | Nom déjà utilisé |
+| `-4` | Slot invalide (< 1) |
+| `-5` | Slot occupé (chevauchement) |
+
+**Contraintes de suppression :**
+- `/rack delete` : échoue si la baie contient encore des serveurs ou switches.
+- `/server delete` : échoue si le serveur est allumé. Retire aussi tous ses câbles.
+- `/switch delete` : échoue si le switch est allumé. Retire les câbles associés et supprime le réseau Podman backing.
+
+**`infra_server_nets(inf, name, nets, max)`** — Retourne les noms des switches auxquels le serveur est câblé (utilisé pour connecter le conteneur aux bons réseaux Podman au démarrage).
 
 ---
 
@@ -163,7 +222,7 @@ SSH_PASSWORD       = "datacenter2031"
 **Structures :**
 
 - `VCell` — une cellule : caractère, paire de couleurs ncurses, attributs (`A_BOLD`, `A_UNDERLINE`, `A_REVERSE`).
-- `VTerm` — état complet : buffer principal (`screen`), buffer alternatif (`altscreen`), position curseur, région de scroll, attributs courants, machine à états du parseur.
+- `VTerm` — état complet : buffer principal (`screen`), buffer alternatif (`altscreen`), position curseur, région de scroll, attributs courants, parseur, ring-buffer de scrollback.
 
 **Machine à états (`vterm_process`)** :
 
@@ -185,7 +244,9 @@ ST_NORMAL → ESC → ST_ESC → '[' → ST_CSI → commande → ST_NORMAL
 | Écran alternatif | `?1049h`/`?1049l`, `?47h`/`?47l` (pour vim, less, htop) |
 | Sauvegarde curseur | ESC 7 / ESC 8 (DECSC/DECRC) |
 
-**Gestion des couleurs :** cache `pair_cache[fg][bg]` évite de ré-allouer des paires ncurses identiques. Couleurs indexées 1-8 (ANSI 0-7). Les paires 1-7 sont réservées à l'UI du jeu ; le VTerm part de `first_pair = 8`.
+**Gestion des couleurs :** cache `pair_cache[fg][bg]` évite de ré-allouer des paires ncurses identiques. Les paires 1-7 sont réservées à l'UI ; le VTerm part de `first_pair = 8`.
+
+**Scrollback :** ring-buffer circulaire de `SCROLLBACK_LINES = 500` lignes. Alimenté uniquement quand la ligne du haut quitte l'écran en scroll naturel (pas en altscreen, pour ne pas polluer avec vim/htop). `vterm_scroll(vt, delta)` ajuste `sb_offset` ; `vterm_render()` utilise ce buffer si `sb_offset > 0`.
 
 **`vterm_render(vt, win)`** — Redessine toute la fenêtre cellule par cellule avec `waddch()`, puis repositionne le curseur ncurses.
 
@@ -201,9 +262,16 @@ Ring-buffer circulaire de `HISTORY_MAX` (64) entrées.
 
 ---
 
-### `Containerfile` — Image Docker/Podman
+### `Containerfile` — Image Podman
 
-Basée sur `debian:bookworm-slim`. Installe : `openssh-server`, outils Unix courants (`bash`, `vim-tiny`, `htop`, `curl`, `iproute2`, etc.).
+Basée sur `debian:bookworm-slim`. Installe openssh-server, outils Unix courants, et une large palette d'outils sysadmin :
+
+| Catégorie | Paquets |
+|---|---|
+| Réseau | `iproute2`, `iputils-ping`, `traceroute`, `tcpdump`, `nmap`, `netcat-openbsd`, `dnsutils`, `mtr-tiny`, `iperf3`, `iptables`, `isc-dhcp-client` |
+| Monitoring | `htop`, `procps`, `lsof` |
+| Débogage | `strace`, `gcc`, `make` |
+| Fichiers | `vim-tiny`, `nano`, `less`, `curl`, `rsync`, `tree`, `jq` |
 
 Crée l'utilisateur `player` (mot de passe `datacenter2031`) avec sudo sans mot de passe. Active l'authentification par mot de passe SSH, désactive le login root.
 
@@ -215,9 +283,29 @@ Crée l'utilisateur `player` (mot de passe `datacenter2031`) avec sudo sans mot 
 make        # compile → ./game
 make re     # recompilation complète
 make clean  # supprime build/ et ./game
+make test   # lance les 3 suites de tests unitaires
 ```
 
 **Dépendances :** `gcc`, `libncurses-dev`, `libssh2-dev`, `podman`.
+
+---
+
+## Tests unitaires
+
+Trois suites dans `tests/` :
+
+| Fichier | Tests | Couvre |
+|---|---|---|
+| `test_infra.c` | 31 | Racks, serveurs, switches, câbles, persistance |
+| `test_history.c` | 10 | Push, dédup, navigation prev/next, restauration |
+| `test_vterm.c` | 21 | Lifecycle, affichage, CSI, SGR, scrollback, altscreen |
+
+Les tests `test_history` et `test_vterm` utilisent un stub `tests/ncurses.h` (types et fonctions inline vides) afin de compiler sans ncurses ni libssh2.
+
+```bash
+make test
+# ✓  Toutes les suites passées  (62 tests au total)
+```
 
 ---
 
@@ -229,35 +317,94 @@ make clean  # supprime build/ et ./game
 
 Au premier lancement, l'image Podman est construite automatiquement (~30 s). Les conteneurs déployés restent persistants entre les sessions.
 
-Les commandes du jeu sont préfixées par `/`. Tout le reste est envoyé directement au shell du conteneur actif.
+---
 
-**Commandes du jeu (`/`) :**
+## Commandes du jeu
 
-```
-/deploy <nom> [<image>] [--networks net1,net2]   # déploie un conteneur
-/stop <nom>                                       # arrête un conteneur (persistant)
-/network create <nom>                             # crée un réseau Podman
-/network delete <nom>                             # supprime un réseau Podman
-/exit                                             # quitte le jeu
-```
+Les commandes jeu sont préfixées par `/`. Tout le reste est envoyé directement au shell du conteneur actif.
 
-**Navigation :**
+### Conteneurs
 
 ```
-F1-F8   # basculer entre conteneurs
-↑ / ↓   # historique des commandes
-Ctrl+C  # interrompt le processus en cours dans le conteneur
+/deploy <nom> [<image>] [--networks net1,net2]   déploie un conteneur
+/stop <nom>                                       arrête un conteneur
 ```
 
-**Scénario routeur :**
+### Réseaux virtuels
 
 ```
+/network create <nom>    crée un réseau Podman isolé
+/network delete <nom>    supprime un réseau Podman
+```
+
+### Infrastructure physique
+
+```
+/rack create <nom> [<units>]                       crée une baie (défaut : 42U)
+/rack list                                         liste toutes les baies
+/rack show <nom>                                   affiche le contenu d'une baie
+/rack delete <nom>                                 supprime une baie vide
+
+/server add <nom> <rack> <slot> [<U> <cpu> <ram> <disk>]   installe un serveur
+/server poweron <nom>                              démarre (déploie le conteneur)
+/server poweroff <nom>                             éteint (arrête le conteneur)
+/server list [<rack>]                              liste les serveurs
+/server delete <nom>                               retire un serveur éteint
+
+/switch add <nom> <rack> <slot> [<U> [<ports>]]   installe un switch
+/switch poweron <nom>                              allume le switch
+/switch poweroff <nom>                             éteint le switch
+/switch list [<rack>]                              liste les switches
+/switch delete <nom>                               retire un switch éteint
+
+/cable connect <serveur>:<nic> <switch>:<port>    câble une NIC à un port switch
+/cable disconnect <serveur>:<nic>                  déconnecte un câble
+/cable list                                        liste tous les câbles
+```
+
+> Chaque switch crée un réseau Podman backing. Les serveurs câblés à ce switch sont connectés à ce réseau au `poweron`, ce qui leur permet de communiquer entre eux.
+
+### Utilitaires
+
+```
+/exit   /quit   quitte le jeu
+```
+
+---
+
+## Navigation
+
+```
+F1–F8                 basculer entre conteneurs/shells
+↑ / ↓                 historique des commandes
+PageUp / PageDown      scroll du scrollback terminal (500 lignes)
+Shift+PageUp/Down      scroll du panel narrateur
+Ctrl+C / Ctrl+D …      transmis directement au processus dans le conteneur
+```
+
+---
+
+## Scénario routeur
+
+```
+/rack create salle-a 42
+/switch add core-sw salle-a 1
 /network create lan-a
 /network create lan-b
+/switch poweron core-sw
 /deploy router01 --networks lan-a,lan-b
-# puis dans router01 (F2) :
+# → F2 :
 echo 1 > /proc/sys/net/ipv4/ip_forward
-ip route add ...
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ```
 
-**Persistance :** les conteneurs déployés et leurs réseaux additionnels sont sauvegardés dans `~/.sysadmin-game.state` et restaurés automatiquement au prochain lancement.
+---
+
+## Persistance
+
+| Fichier | Contenu |
+|---|---|
+| `~/.sysadmin-game.state` | Conteneurs déployés avec leurs réseaux additionnels |
+| `~/.sysadmin-game.infra` | Racks, serveurs, switches, câbles, état allumé/éteint |
+
+Les deux fichiers sont relus au démarrage. Le conteneur principal (`sysadmin-game`) est toujours recréé, jamais persisté dans `.state`.
