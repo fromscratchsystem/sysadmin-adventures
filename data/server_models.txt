@@ -1,0 +1,21 @@
+# Catalogue de modèles de serveurs (châssis)
+# Format : id | label | size_u | has_ipmi | max_ram_slots | max_disk_slots
+#   size_u         : hauteur en U  (0 = mini PC, 2 par 1U)
+#   has_ipmi       : 1 = IPMI/BMC présent, 0 = accès physique requis
+#   max_ram_slots  : nombre max de barrettes RAM installables
+#   max_disk_slots : nombre max de disques installables
+# Lignes commençant par # : commentaires
+
+# ── Serveurs rack 1U ──────────────────────────────────────────────────
+generic-1u | Serveur rack 1U generique           | 1 | 1 | 4 | 4
+dell-r240  | Dell PowerEdge R240 (1U)            | 1 | 1 | 4 | 2
+hp-dl360   | HP ProLiant DL360 Gen9 (1U)         | 1 | 1 | 4 | 4
+
+# ── Serveurs rack 2U ──────────────────────────────────────────────────
+generic-2u | Serveur rack 2U generique           | 2 | 1 | 4 | 4
+dell-r740  | Dell PowerEdge R740 (2U)            | 2 | 1 | 4 | 4
+hp-dl380   | HP ProLiant DL380 Gen10 (2U)        | 2 | 1 | 4 | 4
+
+# ── Mini PC d'occasion (pas d'IPMI, 2 par 1U) ────────────────────────
+nuc-i5     | Intel NUC i5 (occasion)             | 0 | 0 | 2 | 1
+hp-prodesk | HP ProDesk Mini G5 (occasion)       | 0 | 0 | 2 | 2

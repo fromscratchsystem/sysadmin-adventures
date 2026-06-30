@@ -1,0 +1,47 @@
+# Catalogue de composants hardware
+# Format : type | id | label | cores | ghz10 | mem_gen | size_mb | size_gb | disk_type | iops
+#   type     : cpu / ram / disk
+#   ghz10    : fréquence × 10  (ex: 26 = 2.6 GHz)
+#   mem_gen  : DDR3 / DDR4 / DDR5  (CPU = génération supportée, RAM = génération du module)
+#   size_mb  : capacité RAM en Mo
+#   size_gb  : capacité disque en Go
+#   disk_type: HDD / SSD / NVMe
+#   iops     : débit disque estimé
+# Champs non applicables : 0 ou laissé vide
+# Lignes commençant par # : commentaires
+
+# ── CPU – DDR3 ────────────────────────────────────────────────────────
+cpu | atom-d510    | Intel Atom D510           |  2 | 16 | DDR3 |     0 |    0 |      |     0
+cpu | xeon-e3-1220 | Intel Xeon E3-1220 v3     |  4 | 31 | DDR3 |     0 |    0 |      |     0
+cpu | xeon-e5-2670 | Intel Xeon E5-2670        |  8 | 26 | DDR3 |     0 |    0 |      |     0
+
+# ── CPU – DDR4 ────────────────────────────────────────────────────────
+cpu | epyc-7302    | AMD EPYC 7302             | 16 | 30 | DDR4 |     0 |    0 |      |     0
+cpu | epyc-7543    | AMD EPYC 7543             | 32 | 28 | DDR4 |     0 |    0 |      |     0
+
+# ── CPU – DDR5 ────────────────────────────────────────────────────────
+cpu | xeon-w3-2435 | Intel Xeon W3-2435        |  8 | 31 | DDR5 |     0 |    0 |      |     0
+
+# ── RAM – DDR3 ────────────────────────────────────────────────────────
+ram | ddr3-4gb     | 4 GB DDR3 ECC             |  0 |  0 | DDR3 |  4096 |    0 |      |     0
+ram | ddr3-16gb    | 16 GB DDR3 ECC            |  0 |  0 | DDR3 | 16384 |    0 |      |     0
+
+# ── RAM – DDR4 ────────────────────────────────────────────────────────
+ram | ddr4-16gb    | 16 GB DDR4 ECC            |  0 |  0 | DDR4 | 16384 |    0 |      |     0
+ram | ddr4-32gb    | 32 GB DDR4 ECC            |  0 |  0 | DDR4 | 32768 |    0 |      |     0
+
+# ── RAM – DDR5 ────────────────────────────────────────────────────────
+ram | ddr5-32gb    | 32 GB DDR5 ECC            |  0 |  0 | DDR5 | 32768 |    0 |      |     0
+ram | ddr5-64gb    | 64 GB DDR5 ECC            |  0 |  0 | DDR5 | 65536 |    0 |      |     0
+
+# ── Disque – HDD ──────────────────────────────────────────────────────
+disk | hdd-1tb     | 1 TB SATA HDD             |  0 |  0 |      |     0 | 1000 | HDD  |   150
+disk | hdd-4tb     | 4 TB SATA HDD             |  0 |  0 |      |     0 | 4000 | HDD  |   150
+
+# ── Disque – SSD ──────────────────────────────────────────────────────
+disk | ssd-500gb   | 500 GB SATA SSD           |  0 |  0 |      |     0 |  500 | SSD  |  5000
+disk | ssd-2tb     | 2 TB SATA SSD             |  0 |  0 |      |     0 | 2000 | SSD  |  8000
+
+# ── Disque – NVMe ─────────────────────────────────────────────────────
+disk | nvme-512gb  | 512 GB NVMe M.2           |  0 |  0 |      |     0 |  512 | NVMe | 20000
+disk | nvme-2tb    | 2 TB NVMe U.2             |  0 |  0 |      |     0 | 2000 | NVMe | 60000
