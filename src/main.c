@@ -388,17 +388,17 @@ static void cmd_server(const char *sub, Infra *inf, Panel *nar, ShCtx *sc)
             }
             if (m->size_u == 0) {
                 /* Mini PC */
-                rc = infra_minipc_add(inf, sname, srack, slot,
-                                      m->max_ram_slots, m->max_disk_slots, model_arg);
+                rc = infra_minipc_add(inf, sname, srack, slot, model_arg);
                 if (rc == -5) { narrator_say(nar, "Slot plein (2 mini PCs max par 1U)."); return; }
             } else {
                 rc = infra_server_add_model(inf, sname, srack, slot,
-                                            m->size_u, m->has_ipmi,
-                                            m->max_ram_slots, m->max_disk_slots, model_arg);
+                                            m->size_u, m->has_ipmi, model_arg);
             }
         }
 
         if (rc == 0) {
+            PhysServer *srv = infra_find_server(inf, sname);
+            if (srv) hw_server_init_slots(srv, model_arg[0] ? model_arg : NULL);
             narrator_printf(nar, "Serveur '%s' installe en %s slot %d.", sname, srack, slot);
             infra_save(inf, infra_path());
         } else if (rc == -2) { narrator_say(nar, "Baie inconnue.");
@@ -642,18 +642,8 @@ static void cmd_hardware(const char *sub, Infra *inf, Panel *nar,
 
     if (strncmp(sub, "list", 4) == 0) {
         const char *filter = (sub[4] == ' ') ? sub + 5 : NULL;
-        int shown = 0;
-        if (!filter || strcmp(filter, "cpu") == 0) {
-            hw_list_catalog(HW_CPU,  lines, &nl, 64); narrate(nar, lines, nl); nl = 0; shown++;
-        }
-        if (!filter || strcmp(filter, "ram") == 0) {
-            hw_list_catalog(HW_RAM,  lines, &nl, 64); narrate(nar, lines, nl); nl = 0; shown++;
-        }
-        if (!filter || strcmp(filter, "disk") == 0) {
-            hw_list_catalog(HW_DISK, lines, &nl, 64); narrate(nar, lines, nl); nl = 0; shown++;
-        }
-        if (!shown)
-            narrator_say(nar, "Usage : /hardware list [cpu|ram|disk]");
+        hw_list_catalog(filter, lines, &nl, 64);
+        narrate(nar, lines, nl);
 
     } else if (strncmp(sub, "install ", 8) == 0) {
         char server[32] = "", comp[32] = "";
@@ -709,7 +699,7 @@ static void cmd_hardware(const char *sub, Infra *inf, Panel *nar,
 
     } else {
         narrator_say(nar, "Usage : /hardware list|install|remove|show");
-        narrator_say(nar, "  /hardware list [cpu|ram|disk]");
+        narrator_say(nar, "  /hardware list [cpu|dimm|sata|m2|u2|pcie_x16|...]");
         narrator_say(nar, "  /hardware install <srv> <comp-id>");
         narrator_say(nar, "  /hardware remove  <srv> <comp-id>");
         narrator_say(nar, "  /hardware show    <srv>");
@@ -739,6 +729,12 @@ int main(void) {
     /* Infra physique — recrée les réseaux Podman des switches (idempotent) */
     Infra infra;
     infra_load(&infra, infra_path());
+    /* Serveurs chargés depuis un fichier ancien (sans HW:) : init leurs slots */
+    for (int i = 0; i < infra.nservers; i++) {
+        PhysServer *s = &infra.servers[i];
+        if (s->nhw_slots == 0 && s->model_id[0])
+            hw_server_init_slots(s, s->model_id);
+    }
     hw_recompute_all(&infra);
     for (int i = 0; i < infra.nswitches; i++)
         container_network_create(infra.switches[i].name);

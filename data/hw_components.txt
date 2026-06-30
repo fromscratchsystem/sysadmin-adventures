@@ -1,47 +1,51 @@
 # Catalogue de composants hardware
-# Format : type | id | label | cores | ghz10 | mem_gen | size_mb | size_gb | disk_type | iops
-#   type     : cpu / ram / disk
-#   ghz10    : fréquence × 10  (ex: 26 = 2.6 GHz)
-#   mem_gen  : DDR3 / DDR4 / DDR5  (CPU = génération supportée, RAM = génération du module)
-#   size_mb  : capacité RAM en Mo
-#   size_gb  : capacité disque en Go
-#   disk_type: HDD / SSD / NVMe
-#   iops     : débit disque estimé
-# Champs non applicables : 0 ou laissé vide
+# Format : slot_type | id | label | key=val | key=val | ...
+#   slot_type : cpu / dimm / sata / m2 / u2 / pcie_x16 / pcie_x8 / ...
+#   Propriétés CPU    : cores, ghz10 (fréq × 10), mem_gen
+#   Propriétés DIMM   : size_mb, mem_gen
+#   Propriétés disques: size_gb, disk_type, iops
+#   Propriétés GPU    : vram_gb, tflops, tdp_w
 # Lignes commençant par # : commentaires
 
 # ── CPU – DDR3 ────────────────────────────────────────────────────────
-cpu | atom-d510    | Intel Atom D510           |  2 | 16 | DDR3 |     0 |    0 |      |     0
-cpu | xeon-e3-1220 | Intel Xeon E3-1220 v3     |  4 | 31 | DDR3 |     0 |    0 |      |     0
-cpu | xeon-e5-2670 | Intel Xeon E5-2670        |  8 | 26 | DDR3 |     0 |    0 |      |     0
+cpu | atom-d510    | Intel Atom D510           | cores=2  | ghz10=16 | mem_gen=DDR3
+cpu | xeon-e3-1220 | Intel Xeon E3-1220 v3     | cores=4  | ghz10=31 | mem_gen=DDR3
+cpu | xeon-e5-2670 | Intel Xeon E5-2670        | cores=8  | ghz10=26 | mem_gen=DDR3
 
 # ── CPU – DDR4 ────────────────────────────────────────────────────────
-cpu | epyc-7302    | AMD EPYC 7302             | 16 | 30 | DDR4 |     0 |    0 |      |     0
-cpu | epyc-7543    | AMD EPYC 7543             | 32 | 28 | DDR4 |     0 |    0 |      |     0
+cpu | epyc-7302    | AMD EPYC 7302             | cores=16 | ghz10=30 | mem_gen=DDR4
+cpu | epyc-7543    | AMD EPYC 7543             | cores=32 | ghz10=28 | mem_gen=DDR4
 
 # ── CPU – DDR5 ────────────────────────────────────────────────────────
-cpu | xeon-w3-2435 | Intel Xeon W3-2435        |  8 | 31 | DDR5 |     0 |    0 |      |     0
+cpu | xeon-w3-2435 | Intel Xeon W3-2435        | cores=8  | ghz10=31 | mem_gen=DDR5
 
 # ── RAM – DDR3 ────────────────────────────────────────────────────────
-ram | ddr3-4gb     | 4 GB DDR3 ECC             |  0 |  0 | DDR3 |  4096 |    0 |      |     0
-ram | ddr3-16gb    | 16 GB DDR3 ECC            |  0 |  0 | DDR3 | 16384 |    0 |      |     0
+dimm | ddr3-4gb    | 4 GB DDR3 ECC             | size_mb=4096  | mem_gen=DDR3
+dimm | ddr3-16gb   | 16 GB DDR3 ECC            | size_mb=16384 | mem_gen=DDR3
 
 # ── RAM – DDR4 ────────────────────────────────────────────────────────
-ram | ddr4-16gb    | 16 GB DDR4 ECC            |  0 |  0 | DDR4 | 16384 |    0 |      |     0
-ram | ddr4-32gb    | 32 GB DDR4 ECC            |  0 |  0 | DDR4 | 32768 |    0 |      |     0
+dimm | ddr4-16gb   | 16 GB DDR4 ECC            | size_mb=16384 | mem_gen=DDR4
+dimm | ddr4-32gb   | 32 GB DDR4 ECC            | size_mb=32768 | mem_gen=DDR4
 
 # ── RAM – DDR5 ────────────────────────────────────────────────────────
-ram | ddr5-32gb    | 32 GB DDR5 ECC            |  0 |  0 | DDR5 | 32768 |    0 |      |     0
-ram | ddr5-64gb    | 64 GB DDR5 ECC            |  0 |  0 | DDR5 | 65536 |    0 |      |     0
+dimm | ddr5-32gb   | 32 GB DDR5 ECC            | size_mb=32768 | mem_gen=DDR5
+dimm | ddr5-64gb   | 64 GB DDR5 ECC            | size_mb=65536 | mem_gen=DDR5
 
-# ── Disque – HDD ──────────────────────────────────────────────────────
-disk | hdd-1tb     | 1 TB SATA HDD             |  0 |  0 |      |     0 | 1000 | HDD  |   150
-disk | hdd-4tb     | 4 TB SATA HDD             |  0 |  0 |      |     0 | 4000 | HDD  |   150
+# ── Disque – HDD SATA ─────────────────────────────────────────────────
+sata | hdd-1tb     | 1 TB SATA HDD             | size_gb=1000 | disk_type=HDD | iops=150
+sata | hdd-4tb     | 4 TB SATA HDD             | size_gb=4000 | disk_type=HDD | iops=150
 
-# ── Disque – SSD ──────────────────────────────────────────────────────
-disk | ssd-500gb   | 500 GB SATA SSD           |  0 |  0 |      |     0 |  500 | SSD  |  5000
-disk | ssd-2tb     | 2 TB SATA SSD             |  0 |  0 |      |     0 | 2000 | SSD  |  8000
+# ── Disque – SSD SATA ─────────────────────────────────────────────────
+sata | ssd-500gb   | 500 GB SATA SSD           | size_gb=500  | disk_type=SSD | iops=5000
+sata | ssd-2tb     | 2 TB SATA SSD             | size_gb=2000 | disk_type=SSD | iops=8000
 
-# ── Disque – NVMe ─────────────────────────────────────────────────────
-disk | nvme-512gb  | 512 GB NVMe M.2           |  0 |  0 |      |     0 |  512 | NVMe | 20000
-disk | nvme-2tb    | 2 TB NVMe U.2             |  0 |  0 |      |     0 | 2000 | NVMe | 60000
+# ── Disque – NVMe M.2 ─────────────────────────────────────────────────
+m2 | nvme-512gb    | 512 GB NVMe M.2           | size_gb=512  | disk_type=NVMe | iops=20000
+
+# ── Disque – NVMe U.2 ─────────────────────────────────────────────────
+u2 | nvme-2tb      | 2 TB NVMe U.2             | size_gb=2000 | disk_type=NVMe | iops=60000
+
+# ── Cartes PCIe ───────────────────────────────────────────────────────
+pcie_x16 | rtx-4090     | NVIDIA RTX 4090            | vram_gb=24 | tflops=82  | tdp_w=450
+pcie_x16 | a100-80gb    | NVIDIA A100 80 GB SXM4     | vram_gb=80 | tflops=312 | tdp_w=400
+pcie_x8  | mellanox-cx5 | Mellanox ConnectX-5 25GbE  | ports=2    | speed_mbps=25000
